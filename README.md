@@ -81,4 +81,4 @@ pnpm nsis:make
 
 安装包输出到 `out/nsis`；`pnpm make` 仍可生成开发用 Squirrel 构建。发布使用 NSIS 安装包，不嵌入系统 Node、pnpm 或 dsh。
 
-本项目基于 [Minke](https://github.com/lencx/Minke) 的桌面适配层和 DeepSeek Harness 构建，保留各组件原始许可证与版权声明。
+本项目基于的DeepSeek Harness的桌面适配层构建，保留各组件原始许可证与版权声明。
