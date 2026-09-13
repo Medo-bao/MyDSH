@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="./PROJECT_STATUS.zh-CN.md">项目状态</a> ·
-  <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness 上游</a>
+  <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a>
 </p>
 
 MyDSH 在本地运行 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，将它带入一个专注、本地优先的智能体桌面工作空间。对话、项目文件、终端、网页工具和原生桌面操作始终触手可及，无需在多个应用之间切换，让工作流保持完整。
