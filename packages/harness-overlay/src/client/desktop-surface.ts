@@ -3,6 +3,7 @@ import {
 } from "./desktop-surface.styles.ts";
 import { ChevronLeft, ChevronRight } from "@lucide/icons";
 import { buildLucideDataUri } from "@lucide/icons/build";
+import { installModalFocus } from "./modal-focus.ts";
 
 const DESKTOP_MARKERS = [
   "data-dsh-desktop-frame",
@@ -49,6 +50,8 @@ export type DesktopSurfaceActions = Readonly<{
   toggleSidebar(): void;
   back(): void;
   forward(): void;
+  canBack?(): boolean;
+  canForward?(): boolean;
   showMenu(kind: DesktopToolbarMenuKind, x: number, y: number): void;
   labels: Readonly<{
     toggleSidebar: string;
@@ -402,6 +405,7 @@ export function installDesktopSurface(
     ? undefined
     : createDesktopToolbar(root, actions);
   if (toolbar !== undefined) root.body.prepend(toolbar);
+  const disposeFocus = installModalFocus(root);
   let frame: number | undefined;
   let disposed = false;
 
@@ -412,6 +416,9 @@ export function installDesktopSurface(
     markHeroGlow(root);
     markComposerActions(root, view);
     reconcileDesktopDrag(root, view);
+    const arrows = toolbar?.querySelectorAll<HTMLButtonElement>(".firefly-desktop-toolbar__arrow");
+    if (arrows?.[0]) arrows[0].disabled = actions?.canBack?.() === false;
+    if (arrows?.[1]) arrows[1].disabled = actions?.canForward?.() === false;
   };
   const scheduleReconcile = (): void => {
     if (disposed || frame !== undefined) return;
@@ -468,6 +475,7 @@ export function installDesktopSurface(
   return () => {
     disposed = true;
     observer.disconnect();
+    disposeFocus();
     root.removeEventListener("beforetoggle", handleBeforeToggle, true);
     root.removeEventListener("toggle", handleLayerStateChange, true);
     root.removeEventListener(

@@ -38,6 +38,7 @@ import {
   type ShortcutBindings,
 } from "@minke/harness-overlay/shortcut-contract";
 import { configureAppDataPaths } from "./app-data-paths";
+import type { DesktopDetails } from "@minke/harness-overlay/market-contract.ts";
 import {
   HarnessRuntime,
   type HarnessRuntimeExit,
@@ -125,6 +126,9 @@ let clientUpdater: ClientUpdater | undefined;
 let windowMenuBinding: WindowMenuBinding | undefined;
 let updateTimers: NodeJS.Timeout[] = [];
 let clientUpdateBusy = false;
+let runningHarnessVersion = "";
+let clientUpdateController: AbortController | undefined;
+let clientUpdateStatus: Pick<DesktopDetails, "updatePhase" | "updatePercent" | "updateError"> = { updatePhase: "idle" };
 
 function activeDesktopLocale(): DesktopLocale {
   return desktopLocale?.getSnapshot().active ?? "en";
@@ -228,7 +232,10 @@ function installTray(): void {
       {
         label: desktopText("tray.quit"),
         click: () => {
-          if (marketManager?.installing) void marketManager.whenIdle().then(() => requestApplicationQuit(app));
+          if (marketManager?.installing) {
+            marketManager.cancel();
+            void marketManager.whenIdle().then(() => requestApplicationQuit(app));
+          }
           else requestApplicationQuit(app);
         },
       },
@@ -388,6 +395,12 @@ async function createWindow(): Promise<BrowserWindow> {
     marketManager,
     (event) => event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && isHarnessUrl(event.senderFrame.url),
     () => { app.relaunch(); app.quit(); },
+    {
+      info: async () => ({ version: app.getVersion(), harnessVersion: runningHarnessVersion,
+        electronVersion: process.versions.electron, platform: `${process.platform} ${process.arch}`, updateBusy: clientUpdateBusy, ...clientUpdateStatus }),
+      update: () => checkClientUpdate(true),
+      cancel: () => clientUpdateController?.abort(),
+    },
   );
   shortcutMenuBinding?.refreshBaseMenu();
   windowMenuBinding?.dispose();
@@ -514,6 +527,7 @@ async function startHarness(): Promise<void> {
 
 async function prepareHarnessPlugins(): Promise<void> {
   const systemRuntime = await readHarnessRuntimeLayout();
+  runningHarnessVersion = systemRuntime.dshVersion;
   const dshHome = join(app.getPath("userData"), "harness");
   await installFireflyPlugins({
     appVersion: app.getVersion(), companionRoot: companionPluginRoot(), dshHome,
@@ -573,16 +587,22 @@ async function handleUnexpectedExit(exit: HarnessRuntimeExit): Promise<void> {
 async function checkClientUpdate(manual: boolean): Promise<void> {
   if (clientUpdateBusy || clientUpdater === undefined) return;
   clientUpdateBusy = true;
+  clientUpdateController = new AbortController();
+  const signal = clientUpdateController.signal;
+  clientUpdateStatus = { updatePhase: "checking" };
+  let accepted = false;
   try {
     if (!clientUpdater.enabled) {
       if (manual) await showUpdateMessage("update.unavailableTitle", "update.sourcesMissing");
       return;
     }
-    const update = await clientUpdater.check();
+    const update = await clientUpdater.check(signal);
     if (update === undefined) {
+      clientUpdateStatus = { updatePhase: "current" };
       if (manual) await showUpdateMessage("update.latestTitle", "update.clientLatest");
       return;
     }
+    clientUpdateStatus = { updatePhase: "prompt" };
     const result = await dialog.showMessageBox({
       type: "info",
       title: desktopText("update.clientTitle"),
@@ -593,16 +613,28 @@ async function checkClientUpdate(manual: boolean): Promise<void> {
       cancelId: 1,
       noLink: true,
     });
-    if (result.response !== 0) return;
-    const installer = await clientUpdater.download(update);
+    if (result.response !== 0) { clientUpdateStatus = { updatePhase: "idle" }; return; }
+    signal.throwIfAborted();
+    accepted = true;
+    const installer = await clientUpdater.download(update, { signal, progress: (phase, percent) => {
+      clientUpdateStatus = { updatePhase: phase, updatePercent: percent };
+      mainWindow?.setProgressBar(percent === undefined ? 2 : percent / 100);
+    } });
+    signal.throwIfAborted();
+    clientUpdateStatus = { updatePhase: "installing" };
     await clientUpdater.launchInstaller(installer);
     mainProcessWatchdog?.markCleanExit();
     app.quit();
   } catch (error) {
-    if (manual) await showUpdateError(error);
+    if (error === signal.reason && signal.aborted) { clientUpdateStatus = { updatePhase: "cancelled" }; return; }
+    clientUpdateStatus = { updatePhase: "failed", updateError: error instanceof Error ? error.message : String(error) };
+    if (manual || accepted) await showUpdateError(error);
     else console.error("Automatic desktop update check failed:", error);
   } finally {
     clientUpdateBusy = false;
+    clientUpdateController = undefined;
+    if (clientUpdateStatus.updatePhase === "checking") clientUpdateStatus = { updatePhase: "idle" };
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setProgressBar(-1);
   }
 }
 
@@ -657,6 +689,7 @@ async function bootstrap(): Promise<void> {
   });
 
   await app.whenReady();
+  desktopLocale = new DesktopLocaleRuntime(resolveDesktopLocale(app.getLocale()));
   const systemRuntime = await readHarnessRuntimeLayout();
   const dshHome = join(app.getPath("userData"), "harness");
   mainProcessWatchdog = startMainProcessWatchdog({
@@ -666,9 +699,6 @@ async function bootstrap(): Promise<void> {
       : join(app.getAppPath(), "resources"),
     executable: process.execPath,
   });
-  desktopLocale = new DesktopLocaleRuntime(
-    resolveDesktopLocale(app.getLocale()),
-  );
   installPermissionPolicy();
   const minkeConfig = new MinkeConfigStore(app.getPath("userData"));
   const shortcutStore = minkeConfig.shortcuts;
@@ -806,7 +836,9 @@ async function bootstrap(): Promise<void> {
 }
 
 app.on("before-quit", (event) => {
+  clientUpdateController?.abort();
   if (marketManager?.installing) {
+    marketManager.cancel();
     event.preventDefault();
     if (!marketQuitPending) {
       marketQuitPending = true;
@@ -846,12 +878,17 @@ app.on("window-all-closed", () => app.quit());
 if (started) {
   app.quit();
 } else {
-  void bootstrap().catch((error) => {
+  void bootstrap().catch(async (error) => {
     console.error("MyDSH startup failed:", error);
-    dialog.showErrorBox(
-      desktopText("runtime.startupFailedTitle"),
-      error instanceof Error ? error.stack ?? error.message : String(error),
-    );
-    app.quit();
+    try {
+      await app.whenReady();
+      const result = await dialog.showMessageBox({ type: "error", title: desktopText("runtime.startupFailedTitle"),
+        message: desktopText("runtime.startupHelp"), detail: error instanceof Error ? error.message : String(error),
+        buttons: [desktopText("runtime.restart"), desktopText("runtime.setupGuide"), desktopText("runtime.quit")],
+        defaultId: 0, cancelId: 2, noLink: true });
+      if (result.response === 0) app.relaunch();
+      if (result.response === 1) await shell.openExternal("https://github.com/Medo-bao/MyDSH#readme");
+    } catch (dialogError) { console.error("Unable to show startup recovery:", dialogError); }
+    finally { app.quit(); }
   });
 }

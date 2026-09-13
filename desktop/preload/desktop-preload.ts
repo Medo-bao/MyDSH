@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { MARKET_CHECK_CHANNEL, MARKET_INSTALL_CHANNEL, MARKET_RESTART_CHANNEL, MARKET_STATUS_CHANNEL, type MarketPort } from "@minke/harness-overlay/market-contract.ts";
+import { MARKET_CANCEL_CHANNEL, DESKTOP_CANCEL_UPDATE_CHANNEL, DESKTOP_INFO_CHANNEL, DESKTOP_UPDATE_CHANNEL, MARKET_CHECK_CHANNEL, MARKET_INSTALL_CHANNEL, MARKET_RESTART_CHANNEL, MARKET_STATUS_CHANNEL, type MarketPort } from "@minke/harness-overlay/market-contract.ts";
 import appManifest from "../../package.json";
 import {
   MODEL_RUNTIME_SETTINGS_READ_CHANNEL,
@@ -342,6 +342,10 @@ contextBridge.exposeInMainWorld(
   "minkeDesktop",
   Object.freeze({
     market: Object.freeze({
+      cancel: () => ipcRenderer.invoke(MARKET_CANCEL_CHANNEL),
+      cancelUpdate: () => ipcRenderer.invoke(DESKTOP_CANCEL_UPDATE_CHANNEL),
+      info: () => ipcRenderer.invoke(DESKTOP_INFO_CHANNEL),
+      updateDesktop: () => ipcRenderer.invoke(DESKTOP_UPDATE_CHANNEL),
       status: () => ipcRenderer.invoke(MARKET_STATUS_CHANNEL),
       check: () => ipcRenderer.invoke(MARKET_CHECK_CHANNEL),
       install: () => ipcRenderer.invoke(MARKET_INSTALL_CHANNEL),

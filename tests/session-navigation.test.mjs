@@ -16,11 +16,16 @@ function historyHarness() {
 
 test("session navigation walks backward and forward through selection history", () => {
   const { history, opened } = historyHarness();
+  assert.equal(history.canBack(), false);
+  assert.equal(history.canForward(), false);
   history.observe("a");
   history.observe("b");
   history.observe("c");
+  assert.equal(history.canBack(), true);
+  assert.equal(history.canForward(), false);
 
   assert.equal(history.back(), true);
+  assert.equal(history.canForward(), true);
   assert.equal(history.back(), true);
   assert.equal(history.forward(), true);
   assert.deepEqual(opened, ["b", "a", "b"]);

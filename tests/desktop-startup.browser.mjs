@@ -42,6 +42,42 @@ try {
   const deferSetup = loaded.getByRole("button", { name: "稍后配置", exact: true });
   await deferSetup.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
   if (await deferSetup.isVisible()) await deferSetup.click();
+  const originallyCollapsed = await loaded.locator("[data-sidebar-collapsed]").count() > 0;
+  const sidebarToggle = loaded.locator("[data-dsh-desktop-sidebar-toggle]");
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 960, height: 640 }]) {
+    await loaded.setViewportSize(viewport);
+    if (await loaded.locator("[data-sidebar-collapsed]").count()) {
+      await sidebarToggle.click();
+      await loaded.locator("[data-sidebar-collapsed]").waitFor({ state: "detached" });
+    }
+    await sidebarToggle.click();
+    await loaded.locator("[data-sidebar-collapsed]").waitFor();
+    for (const hovered of [false, true]) {
+      if (hovered) await sidebarToggle.hover();
+      else await loaded.mouse.move(viewport.width - 20, viewport.height - 20);
+      await loaded.waitForFunction(() => {
+        const anchor = document.querySelector("[data-dsh-desktop-titlebar-anchor]");
+        const button = document.querySelector("[data-dsh-desktop-sidebar-toggle]");
+        const session = document.querySelector("[data-dsh-desktop-new-session]");
+        if (!anchor || !button || !session) return false;
+        const rail = anchor.parentElement;
+        if (rail.getAnimations({ subtree: true }).some((animation) =>
+          animation.playState === "running" && animation.effect?.getTiming().iterations !== Infinity)) return false;
+        const center = (element) => { const r = element.getBoundingClientRect(); return r.x + r.width / 2; };
+        const style = getComputedStyle(anchor);
+        const glyph = [...button.querySelectorAll("img, svg")].find((element) => element.getBoundingClientRect().width > 0);
+        return style.paddingLeft === "0px" && style.paddingRight === "0px"
+          && Math.abs(center(button) - center(rail)) < 1
+          && Math.abs(center(button) - center(session)) < 0.5
+          && glyph && Math.abs(center(glyph) - center(session)) < 0.5;
+      }, null, { timeout: 5000 });
+      await loaded.screenshot({ path: `docs/research/sidebar-${viewport.width}-${hovered ? "hover" : "rest"}.png` });
+    }
+  }
+  if (!originallyCollapsed) {
+    await sidebarToggle.click();
+    await loaded.locator("[data-sidebar-collapsed]").waitFor({ state: "detached" });
+  }
   for (const viewport of [{ width: 1280, height: 800 }, { width: 960, height: 640 }]) {
     await loaded.setViewportSize(viewport);
     const geometry = await loaded.evaluate(() => {
@@ -101,16 +137,57 @@ try {
   assert.ok(await loaded.locator("[data-firefly-brand-mark]").count());
   await loaded.screenshot({ path: "docs/research/no-optional-plugins-settings.png" });
   await loaded.screenshot({ path: "docs/research/settings-titlebar-blur.png" });
-  await loaded.getByRole("button", { name: "插件市场管理", exact: true }).click();
+  await loaded.getByRole("navigation").getByRole("button", { name: "关于 MyDSH", exact: true }).click();
+  await loaded.getByText("DeepSeek Harness 版本", { exact: true }).waitFor();
+  await loaded.getByRole("button", { name: "检查软件更新", exact: true }).waitFor();
   const management = loaded.locator(".firefly-market-management");
+  assert.equal(await management.getByRole("link", { name: "MyDSH", exact: true }).getAttribute("href"), "https://github.com/Medo-bao/MyDSH");
+  assert.equal(await management.getByRole("link", { name: "DeepSeek Harness", exact: true }).getAttribute("href"), "https://github.com/deepseek-ai/deepseek-harness");
   await management.getByRole("button", { name: "检测更新", exact: true }).click();
-  await management.locator("dd").nth(1).filter({ hasText: /^\d+\.\d+\.\d+/u }).waitFor({ timeout: 25_000 });
+  await management.locator("dd").nth(5).filter({ hasText: /^\d+\.\d+\.\d+/u }).waitFor({ timeout: 25_000 });
+  await management.locator("dd").first().filter({ hasText: "0.0.2" }).waitFor({ timeout: 30_000 });
+  await management.locator("dd").nth(1).filter({ hasText: /^\d+\.\d+\.\d+/u }).waitFor({ timeout: 5000 });
+  await management.locator("dd").nth(2).filter({ hasText: /^\d+\.\d+\.\d+/u }).waitFor({ timeout: 5000 });
   assert.equal(await management.getByRole("link", { name: "GitHub 仓库" }).getAttribute("href"), "https://github.com/dsh-market/dsh-market");
   assert.equal(await management.getByRole("button", { name: /安装最新版|更新插件市场|已是最新版本/u }).count(), 1);
   assert.equal(await management.getByRole("alert").count(), 0);
   await loaded.screenshot({ path: "docs/research/market-management.png" });
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 960, height: 640 }]) {
+    await loaded.setViewportSize(viewport);
+    assert.equal(await management.evaluate(element => element.scrollWidth > element.clientWidth), false, "About content must not overflow horizontally");
+    await management.getByRole("link", { name: "GitHub 仓库" }).scrollIntoViewIfNeeded();
+    await loaded.screenshot({ path: `docs/research/about-mydsh-${viewport.width}.png` });
+  }
+  await loaded.getByRole("button", { name: "通用设置", exact: true }).click();
+  await loaded.getByRole("navigation").getByRole("button", { name: "关于 MyDSH", exact: true }).click();
+  await management.locator("dd").first().filter({ hasText: "0.0.2" }).waitFor();
+  const settingsDialog = loaded.getByRole("dialog", { name: "设置", exact: true });
+  await settingsDialog.getByRole("button").first().focus();
+  const escapedFocus = [];
+  for (let i = 0; i < 30; i++) {
+    await loaded.keyboard.press("Tab");
+    const outside = await loaded.evaluate(() => {
+      const active = document.activeElement;
+      return active?.closest('[role="dialog"][aria-modal="true"]') ? null : active?.outerHTML.slice(0, 180);
+    });
+    if (outside) escapedFocus.push(outside);
+  }
+  console.log("Settings keyboard focus audit:", JSON.stringify({ escapedFocus }));
+  assert.deepEqual(escapedFocus, [], "Modal keyboard focus must not reach the background");
+  for (let i = 0; i < 30; i++) {
+    await loaded.keyboard.press("Shift+Tab");
+    assert.equal(await loaded.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"][aria-modal="true"]'))), true);
+  }
+  for (const name of ["通用设置", "快捷键", "终端", "模型", "插件", "Agent 预设"]) {
+    const button = settingsDialog.getByRole("button", { name, exact: true });
+    if (await button.count() !== 1) continue;
+    await button.click();
+    await delay(200);
+    console.log("Settings layout audit:", name, await settingsDialog.evaluate(element => ({ width: element.clientWidth, scrollWidth: element.scrollWidth })));
+  }
   await loaded.keyboard.press("Escape");
   await loaded.locator('[data-slot="sidebar.settings"] button[aria-expanded="false"]').first().waitFor();
+  assert.equal(await loaded.evaluate(() => Boolean(document.activeElement?.closest('[data-slot="sidebar.settings"]'))), true, "Closing settings must restore focus to its trigger");
   assert.equal(await loaded.evaluate(() => getComputedStyle(document.querySelector("[data-dsh-desktop-toolbar]"), "::after").content), "none");
   console.log("Upstream settings and desktop chrome remain; all optional plugin settings are absent.");
   console.log("Packaged Electron reached the Harness UI using the existing user profile.");

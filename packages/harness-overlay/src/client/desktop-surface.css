@@ -77,7 +77,7 @@
   app-region: no-drag;
 }
 
-[data-dsh-desktop-toolbar] button:hover {
+[data-dsh-desktop-toolbar] button:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-text-primary);
 }
@@ -187,7 +187,8 @@
   app-region: no-drag;
 }
 
-[data-sidebar-collapsed] [data-dsh-desktop-titlebar-anchor] {
+:root[data-dsh-desktop-surface="windows"]
+  [data-sidebar-collapsed] [data-dsh-desktop-titlebar-anchor] {
   width: 36px !important;
   height: 36px !important;
   margin-top: 0 !important;
@@ -257,3 +258,4 @@
 [data-phase="active"] [data-composer-card] {
   background: var(--dsw-specific-input-major) !important;
 }
+.firefly-desktop-toolbar__arrow:disabled { opacity: .35; cursor: default; }

@@ -352,7 +352,7 @@ test("desktop branding uses Harness slots and keeps collapsed controls aligned",
   );
   assert.match(
     desktopSurfaceStylesSource,
-    /\[data-sidebar-collapsed\] \[data-dsh-desktop-titlebar-anchor\][\s\S]*?height: 36px !important;[\s\S]*?padding: 0 !important;[\s\S]*?background: transparent !important;/u,
+    /:root\[data-dsh-desktop-surface="windows"\]\s+\[data-sidebar-collapsed\] \[data-dsh-desktop-titlebar-anchor\][\s\S]*?height: 36px !important;[\s\S]*?padding: 0 !important;[\s\S]*?background: transparent !important;/u,
   );
   assert.match(
     desktopSurfaceStylesSource,

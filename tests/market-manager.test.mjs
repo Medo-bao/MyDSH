@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { MarketManager, marketReleaseVersion } from "@minke/desktop/main/market-manager.ts";
 import { bindMarketManagement } from "@minke/desktop/main/market-ipc.ts";
-import { MARKET_INSTALL_CHANNEL } from "@minke/harness-overlay/market-contract.ts";
+import { MARKET_CANCEL_CHANNEL, DESKTOP_CANCEL_UPDATE_CHANNEL, DESKTOP_INFO_CHANNEL, DESKTOP_UPDATE_CHANNEL, MARKET_INSTALL_CHANNEL } from "@minke/harness-overlay/market-contract.ts";
 
 const release = (version = "1.2.3") => ({ name: "dshmarket", version, repository: { url: "git+https://github.com/dsh-market/dsh-market.git" } });
 async function fixture(t) {
@@ -91,6 +91,7 @@ test("registry errors and concurrent installs cannot start a second mutation", a
   let idle = false;
   const finished = manager.whenIdle().then(() => { idle = true; });
   assert.equal(manager.installing, true);
+  assert.equal((await manager.status()).installing, true);
   await assert.rejects(manager.install(), /already running/);
   assert.equal(idle, false);
   releaseCheck(release());
@@ -98,6 +99,7 @@ test("registry errors and concurrent installs cannot start a second mutation", a
   await finished;
   assert.equal(idle, true);
   assert.equal(manager.installing, false);
+  assert.equal((await manager.status()).installing, false);
   const broken = new MarketManager(f.home, { latestRelease: async () => { throw new Error("offline"); }, installRelease: () => assert.fail("must not install") });
   await assert.rejects(broken.install(), /offline/);
   assert.equal((await broken.status()).installedVersion, "1.2.3");
@@ -115,4 +117,43 @@ test("market IPC authorizes the caller, rejects payloads and disposes", async ()
   assert.equal(installs, 1);
   binding.dispose();
   assert.equal(handlers.size, 0);
+});
+
+test("About IPC exposes metadata and only the desktop updater to authorized callers", async () => {
+  const handlers = new Map();
+  let updates = 0;
+  const details = { version: "0.0.2", harnessVersion: "0.1.5-rc.2", electronVersion: "43.4.0", platform: "win32 x64", updateBusy: false };
+  const binding = bindMarketManagement({ handle: (name, fn) => handlers.set(name, fn), removeHandler: name => handlers.delete(name) },
+    {}, event => event.trusted, () => {}, { info: async () => details, update: async () => { updates++; } });
+  for (const channel of [DESKTOP_INFO_CHANNEL, DESKTOP_UPDATE_CHANNEL, MARKET_CANCEL_CHANNEL, DESKTOP_CANCEL_UPDATE_CHANNEL]) {
+    assert.throws(() => handlers.get(channel)({ trusted: false }), /Unauthorized/);
+    assert.throws(() => handlers.get(channel)({ trusted: true }, "extra"), /Unauthorized/);
+  }
+  assert.deepEqual(await handlers.get(DESKTOP_INFO_CHANNEL)({ trusted: true }), details);
+  await handlers.get(DESKTOP_UPDATE_CHANNEL)({ trusted: true });
+  assert.equal(updates, 1);
+  binding.dispose();
+  assert.equal(handlers.size, 0);
+});
+
+test("cancelling market installation restores the profile before becoming idle", async t => {
+  const f = await fixture(t);
+  let started;
+  const ready = new Promise(resolve => { started = resolve; });
+  const manager = new MarketManager(f.home, { latestRelease: async () => release(), installRelease: async (home, version, signal) => {
+    await f.installRelease(home, version);
+    started();
+    await new Promise((resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
+  } });
+  const installing = manager.install();
+  const rejected = assert.rejects(installing, { name: "AbortError" });
+  await ready;
+  manager.cancel();
+  await rejected;
+  await manager.whenIdle();
+  assert.deepEqual(JSON.parse(await readFile(f.profilePath, "utf8")), f.original);
+  const status = await manager.status();
+  assert.equal(status.installing, false);
+  assert.equal(status.cancelled, true);
+  assert.equal(status.restartRequired, false);
 });

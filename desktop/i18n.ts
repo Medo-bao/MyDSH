@@ -10,6 +10,8 @@ const zh = {
   "runtime.quit": "退出 MyDSH",
   "runtime.restartFailedTitle": "无法重新启动 DeepSeek Harness",
   "runtime.startupFailedTitle": "MyDSH 启动失败",
+  "runtime.startupHelp": "请检查系统运行环境（Node.js 24+、pnpm 11+ 和 dsh）及网络连接。",
+  "runtime.setupGuide": "查看安装说明",
   "menu.file": "文件",
   "menu.edit": "编辑",
   "menu.view": "视图",
@@ -88,6 +90,8 @@ const en: Record<DesktopMessageKey, string> = {
   "runtime.restartFailedTitle":
     "Unable to restart DeepSeek Harness",
   "runtime.startupFailedTitle": "MyDSH failed to start",
+  "runtime.startupHelp": "Check the system runtime (Node.js 24+, pnpm 11+, and dsh) and network connection.",
+  "runtime.setupGuide": "Installation guide",
   "menu.file": "File",
   "menu.edit": "Edit",
   "menu.view": "View",

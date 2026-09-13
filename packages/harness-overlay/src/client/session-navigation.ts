@@ -35,6 +35,9 @@ export class SessionNavigationHistory {
   }
 
   /** Return to the previous selected Session. */
+  canBack(): boolean { return this.#entries[this.#current === undefined ? this.#index : this.#index - 1] !== undefined; }
+  canForward(): boolean { return this.#entries[this.#index + 1] !== undefined; }
+
   back(): boolean {
     return this.#moveTo(
       this.#current === undefined ? this.#index : this.#index - 1,

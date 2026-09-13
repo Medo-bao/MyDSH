@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { runCancellableProcess } from "./cancellable-process.ts";
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { MARKET_REPOSITORY, type MarketStatus } from "@minke/harness-overlay/market-contract.ts";
@@ -18,28 +18,20 @@ export function marketReleaseVersion(value: unknown): string {
   return manifest.version;
 }
 
-async function latestRelease(): Promise<unknown> {
+async function latestRelease(signal?: AbortSignal): Promise<unknown> {
   const response = await fetch("https://registry.npmjs.org/dshmarket/latest", {
-    signal: AbortSignal.timeout(15_000), headers: { accept: "application/json" },
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000), headers: { accept: "application/json" },
   });
   if (!response.ok) throw new Error(`Market update check failed: HTTP ${response.status}`);
   return response.json();
 }
 
-async function installRelease(home: string, version: string): Promise<void> {
+async function installRelease(home: string, version: string, signal: AbortSignal): Promise<void> {
   const runtime = await readHarnessRuntimeLayout();
-  await new Promise<void>((resolve, reject) => {
-    let output = "";
-    const child = spawn(runtime.pnpmExecutable, [...runtime.pnpmArguments,
+  await runCancellableProcess(runtime.pnpmExecutable, [...runtime.pnpmArguments,
       "add", "--save-exact", "--ignore-scripts", "--registry=https://registry.npmjs.org", `dshmarket@${version}`,
       `@deepseek-ai/dsh-settings@${runtime.dshVersion}`,
-    ], { cwd: join(home, "profiles", "web"), env: { ...process.env, DSH_HOME: home }, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-    const collect = (data: Buffer) => { output = (output + data.toString()).slice(-3000); };
-    child.stdout.on("data", collect);
-    child.stderr.on("data", collect);
-    child.once("error", reject);
-    child.once("close", (code) => code === 0 ? resolve() : reject(new Error(`Market installation failed (exit ${String(code)})\n${output}`)));
-  });
+    ], { cwd: join(home, "profiles", "web"), env: { ...process.env, DSH_HOME: home }, signal });
 }
 
 export class MarketManager {
@@ -48,6 +40,9 @@ export class MarketManager {
   #latest: string | null = null;
   #restartRequired = false;
   #installing = false;
+  #controller?: AbortController;
+  #error: string | null = null;
+  #cancelled = false;
   #idle: Promise<void> = Promise.resolve();
 
   constructor(home: string, dependencies = {
@@ -56,6 +51,7 @@ export class MarketManager {
 
   get installing(): boolean { return this.#installing; }
   whenIdle(): Promise<void> { return this.#idle; }
+  cancel(): void { this.#controller?.abort(new DOMException("Installation cancelled", "AbortError")); }
 
   async #installed(): Promise<string | null> {
     try {
@@ -72,22 +68,27 @@ export class MarketManager {
 
   async status(): Promise<MarketStatus> {
     const installedVersion = await this.#installed();
-    return { installedVersion, latestVersion: this.#latest, restartRequired: this.#restartRequired,
+    return { installing: this.#installing, error: this.#error, cancelled: this.#cancelled, installedVersion, latestVersion: this.#latest, restartRequired: this.#restartRequired,
       updateAvailable: this.#latest !== null && (installedVersion === null || compareReleaseVersions(this.#latest, installedVersion) > 0) };
   }
 
-  async check(): Promise<MarketStatus> {
-    this.#latest = marketReleaseVersion(await this.dependencies.latestRelease());
+  async check(signal?: AbortSignal): Promise<MarketStatus> {
+    this.#latest = marketReleaseVersion(await this.dependencies.latestRelease(signal));
     return this.status();
   }
 
   async install(): Promise<MarketStatus> {
     if (this.#installing) throw new Error("A market installation is already running");
     this.#installing = true;
+    this.#error = null;
+    this.#cancelled = false;
+    this.#controller = new AbortController();
+    const signal = AbortSignal.any([this.#controller.signal, AbortSignal.timeout(300_000)]);
     let finish!: () => void;
     this.#idle = new Promise<void>((resolve) => { finish = resolve; });
     try {
-      const status = await this.check();
+      const status = await this.check(signal);
+      signal.throwIfAborted();
       const version = status.latestVersion!;
       if (status.installedVersion !== null && compareReleaseVersions(version, status.installedVersion) < 0) return status;
       if (status.installedVersion === version) {
@@ -96,7 +97,8 @@ export class MarketManager {
       }
       const transaction = await pluginInstallTransaction(this.home, join(this.home, "firefly-plugin-state.json"));
       await transaction(async () => {
-        await this.dependencies.installRelease(this.home, version);
+        await this.dependencies.installRelease(this.home, version, signal);
+        signal.throwIfAborted();
         if (await this.#installed() !== version) throw new Error("Market installation version verification failed");
         const path = join(this.home, "profiles", "web", "package.json");
         const profile = JSON.parse(await readFile(path, "utf8"));
@@ -111,6 +113,10 @@ export class MarketManager {
       });
       this.#restartRequired = true;
       return this.status();
-    } finally { this.#installing = false; finish(); }
+    } catch (error) {
+      this.#cancelled = error === signal.reason && signal.reason?.name === "AbortError";
+      this.#error = this.#cancelled ? null : error instanceof Error ? error.message : String(error);
+      throw error;
+    } finally { this.#installing = false; this.#controller = undefined; finish(); }
   }
 }

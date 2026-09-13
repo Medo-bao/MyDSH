@@ -734,6 +734,8 @@ export function apply(ctx: HarnessClientContext): void {
         toggleSidebar: () => ctx.layout.toggleSidebar(),
         back: () => { sessionNavigation.back(); },
         forward: () => { sessionNavigation.forward(); },
+        canBack: () => sessionNavigation.canBack(),
+        canForward: () => sessionNavigation.canForward(),
         showMenu: (kind, x, y) => {
           void windowMenu.popup(kind, x, y).catch((error: unknown) => {
             console.error("Unable to open the desktop menu:", error);

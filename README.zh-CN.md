@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">English</a> · 简体中文
+  简体中文 · <a href="./README.en.md">English</a>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@ MyDSH 在本地运行 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek
 
 ## 安装
 
-当前版本为 **0.0.1**，只提供 Windows x64 安装包。请从 [MyDSH 发布页](https://github.com/Medo-bao/MyDSH/releases) 下载，并核对随包的 SHA-256 清单。
+当前版本为 **0.0.2**，只提供 Windows x64 安装包。请从 [MyDSH 发布页](https://github.com/Medo-bao/MyDSH/releases) 下载，并核对随包的 SHA-256 清单。
 
 运行前需要系统 PATH 中有 Node.js 24+、Corepack/pnpm 11.7.0 和 `@deepseek-ai/dsh@0.1.5-rc.2`。安装包不包含这三项运行环境。托盘只检查 MyDSH 桌面端更新，不检查或安装上游 Harness 更新。插件市场按需安装，不默认预装；上游名称保留，桌面图标使用 MyDSH 品牌。
 
@@ -46,7 +46,7 @@ MyDSH 在本地运行 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek
 
 ## 从源码构建
 
-请在 Windows x64 主机上构建 MyDSH。构建产物位于 `out/make`，本项目当前不支持 macOS/Linux 或跨平台打包。
+请在 Windows x64 主机上构建 MyDSH。发布安装包位于 `out/nsis`，本项目当前不支持 macOS/Linux 或跨平台打包。
 
 环境依赖：
 
