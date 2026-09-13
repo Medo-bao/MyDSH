@@ -1,0 +1,27 @@
+appId: ai.firefly.harness
+productName: MyDSH
+artifactName: MyDSH-${version}-${arch}-Setup.${ext}
+directories:
+  output: out/nsis
+win:
+  icon: resources/icons/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  executableName: MyDSH
+  legalTrademarks: MyDSH contributors
+nsis:
+  installerIcon: resources/icons/icon.ico
+  uninstallerIcon: resources/icons/icon.ico
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: MyDSH
+  uninstallDisplayName: MyDSH
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+compression: normal

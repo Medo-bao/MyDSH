@@ -1,0 +1,18 @@
+.firefly-market-management {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.firefly-market-management h3 { margin: 0 0 24px; font-size: 16px; font-weight: 600; }
+.firefly-market-management dl { margin: 0 0 24px; }
+.firefly-market-management dl > div { display: flex; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.firefly-market-management dd { margin: 0; overflow-wrap: anywhere; }
+.firefly-market-management dt { color: var(--dsw-alias-label-secondary); }
+.firefly-market-management__actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.firefly-market-management button { min-height: 34px; padding: 6px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-alias-bg-base); color: inherit; font: inherit; cursor: pointer; }
+.firefly-market-management button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.firefly-market-management button:disabled { opacity: .5; cursor: default; }
+.firefly-market-management a { color: var(--dsw-alias-label-primary); }
+.firefly-market-management :focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+.firefly-market-management p { min-height: 20px; overflow-wrap: anywhere; color: var(--dsw-alias-label-secondary); }
+.firefly-market-management [role="alert"] { color: var(--dsw-alias-label-primary); }

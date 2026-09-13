@@ -1,0 +1,61 @@
+{
+  "name": "mydsh",
+  "productName": "MyDSH",
+  "desktopName": "mydsh.desktop",
+  "description": "Desktop client powered by DeepSeek Harness",
+  "author": "MyDSH contributors",
+  "license": "Apache-2.0",
+  "private": true,
+  "version": "0.0.1",
+  "packageManager": "pnpm@11.7.0",
+  "main": ".vite/build/main.js",
+  "scripts": {
+    "icons:generate": "node scripts/forge/generate-icons.mjs",
+    "typecheck": "tsc --noEmit && pnpm --filter @firefly-harness/bundle-companion typecheck",
+    "build:harness-overlay": "node scripts/harness/build-overlay.mjs",
+    "build:preload": "vite build --config vite.preload.config.mts",
+    "test:desktop": "node scripts/harness/build-overlay.mjs && node --import ./scripts/register-path-aliases.mts --test tests/*.test.mjs",
+    "harness:verify": "node scripts/harness/verify.mjs",
+    "harness:stage": "node scripts/harness/stage.mjs",
+    "harness:stage:fast": "node scripts/harness/stage.mjs --skip-install --skip-build",
+    "harness:size": "node scripts/harness/runtime-size.mjs",
+    "harness:smoke": "node scripts/harness/smoke.mjs",
+    "harness:smoke:packaged": "node scripts/harness/smoke.mjs --packaged",
+    "start": "pnpm run build:harness-overlay && electron-forge start",
+    "forge:package": "node --max-old-space-size=8192 scripts/forge/run.mjs package --platform=win32 --arch=x64",
+    "forge:make": "node --max-old-space-size=8192 scripts/forge/run.mjs make --platform=win32 --arch=x64",
+    "nsis:make": "electron-builder --prepackaged \"out/MyDSH-win32-x64\" --win nsis --x64",
+    "package": "pnpm run build:harness-overlay && pnpm run forge:package",
+    "make": "pnpm run build:harness-overlay && pnpm run forge:make"
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "1.0.1",
+    "electron-window-state": "5.0.3",
+    "node-pty": "1.2.0-beta.15",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "7.11.2",
+    "@electron-forge/maker-squirrel": "7.11.2",
+    "@electron-forge/plugin-fuses": "7.11.2",
+    "@electron-forge/plugin-vite": "7.11.2",
+    "@electron/fuses": "2.1.3",
+    "@electron/rebuild": "4.2.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/electron-squirrel-startup": "1.0.2",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.0.5",
+    "electron": "43.4.0",
+    "electron-builder": "26.15.3",
+    "electron-winstaller": "5.4.4",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.2.1"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -1,0 +1,259 @@
+[data-dsh-desktop-toolbar] {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 0 148px 0 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 96%, transparent);
+  color: var(--dsw-alias-text-secondary);
+  user-select: none;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+:root[data-dsh-desktop-surface="windows"],
+:root[data-dsh-desktop-surface="windows"] body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+:root[data-dsh-desktop-surface="windows"] #root {
+  position: fixed;
+  inset: 44px 0 0;
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  overflow: auto;
+}
+
+:root[data-dsh-desktop-drag-enabled] [data-dsh-desktop-toolbar] {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+/* Extend the upstream settings mask over the out-of-root desktop toolbar. */
+/* Settings are centered in the usable area below the 44px native caption. */
+:root[data-dsh-desktop-surface="windows"] [data-slot="sidebar.settings"] [role="presentation"]:has(> [role="dialog"][aria-modal="true"]) {
+  inset: 44px 0 0;
+}
+
+:root[data-dsh-desktop-surface="windows"] [data-slot="sidebar.settings"] [role="presentation"] > [role="dialog"][aria-modal="true"] {
+  height: min(800px, calc(100dvh - 92px));
+}
+
+/* Extend the upstream settings mask over the out-of-root desktop toolbar. */
+:root:has([data-slot="sidebar.settings"] button[aria-haspopup="dialog"][aria-expanded="true"]) [data-dsh-desktop-toolbar] {
+  border-bottom-width: 0;
+}
+
+:root:has([data-slot="sidebar.settings"] button[aria-haspopup="dialog"][aria-expanded="true"]) [data-dsh-desktop-toolbar]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--dsw-alias-bg-mask-1);
+  backdrop-filter: var(--dsw-mask-blur);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+[data-dsh-desktop-toolbar] button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: 13px/1 "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+[data-dsh-desktop-toolbar] button:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-text-primary);
+}
+
+[data-dsh-desktop-toolbar] button:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
+}
+
+.firefly-desktop-toolbar__icon {
+  width: 30px;
+  padding: 0;
+}
+
+.firefly-desktop-toolbar__arrow span {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  background: currentColor;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+}
+
+.firefly-desktop-toolbar__sidebar span {
+  position: relative;
+  width: 16px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+}
+
+.firefly-desktop-toolbar__sidebar span::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 5px;
+  width: 1.5px;
+  background: currentColor;
+}
+
+.firefly-desktop-toolbar__menu {
+  padding: 0 10px;
+}
+
+#root :has(> [data-dsh-desktop-titlebar-anchor]),
+[data-dsh-desktop-base-surface] {
+  background-color: transparent !important;
+}
+
+[data-dsh-desktop-sidebar-fade],
+[data-dsh-desktop-hero-glow] {
+  display: none !important;
+}
+
+[data-dsh-desktop-titlebar-anchor] {
+  position: relative;
+  height: 44px !important;
+  margin-top: 0 !important;
+  padding-left: 14px !important;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+:root[data-dsh-desktop-surface="windows"]
+  [data-dsh-desktop-titlebar-anchor] {
+  height: 44px !important;
+  margin-top: 0 !important;
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 92%, transparent);
+  backdrop-filter: blur(18px) saturate(125%);
+}
+
+[data-firefly-brand-mark] {
+  display: block;
+  flex: none;
+  border-radius: 28%;
+  object-fit: cover;
+  box-shadow: 0 1px 3px color-mix(in srgb, #111827 18%, transparent);
+}
+
+[data-dsh-desktop-sidebar-toggle] {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  margin-left: auto !important;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+[data-dsh-desktop-titlebar-anchor] > button {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+[data-slot="conversation.session.header"] {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+[data-dsh-desktop-resize-handle] {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+[data-sidebar-collapsed] [data-dsh-desktop-titlebar-anchor] {
+  width: 36px !important;
+  height: 36px !important;
+  margin-top: 0 !important;
+  padding: 0 !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  overflow: visible !important;
+}
+
+[data-sidebar-collapsed]
+  [data-slot="sidebar.footer.action"] {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 36px;
+}
+
+[data-dsh-desktop-frame]:has([data-phase="hero"])
+  [data-dsh-desktop-new-session],
+[data-dsh-desktop-frame]:has([data-phase="settling"])
+  [data-dsh-desktop-new-session] {
+  background: transparent !important;
+}
+
+[data-dsh-desktop-frame]:has([data-phase="hero"])
+  [data-dsh-desktop-new-session]:hover,
+[data-dsh-desktop-frame]:has([data-phase="settling"])
+  [data-dsh-desktop-new-session]:hover {
+  background: var(--dsw-alias-interactive-bg-hover) !important;
+}
+
+[data-sidebar-collapsed] [data-dsh-desktop-new-session] {
+  background: transparent !important;
+}
+
+[data-sidebar-collapsed] [data-dsh-desktop-new-session]:hover {
+  background: var(--dsw-alias-interactive-bg-hover) !important;
+}
+
+[data-phase="hero"] {
+  background: transparent !important;
+}
+
+[data-phase="hero"] [data-composer-card] {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+[data-phase="hero"] [data-dsh-desktop-composer-add],
+[data-phase="hero"] [data-dsh-desktop-composer-primary] {
+  background: var(--dsw-alias-interactive-bg-active) !important;
+}
+
+[data-phase="hero"] [data-dsh-desktop-composer-primary] {
+  color: var(--dsw-alias-state-business-primary) !important;
+}
+
+[data-phase="hero"]
+  [data-dsh-desktop-composer-add]:hover:not(:disabled),
+[data-phase="hero"]
+  [data-dsh-desktop-composer-primary]:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-accent) !important;
+}
+
+[data-phase="active"] [data-composer-card] {
+  background: var(--dsw-specific-input-major) !important;
+}

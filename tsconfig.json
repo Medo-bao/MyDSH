@@ -1,0 +1,47 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@@/*": ["./*"],
+      "@minke/desktop/*": ["./desktop/*"],
+      "@minke/harness-overlay/*": [
+        "./packages/harness-overlay/src/*"
+      ],
+      "@minke/resources/*": ["./resources/*"],
+      "@vendor/deepseek-harness/*": [
+        "./vendor/deepseek-harness/*"
+      ]
+    },
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["node", "vite/client"]
+  },
+  "include": [
+    "config",
+    "desktop",
+    "desktop/**/*.css",
+    "forge.config.ts",
+    "forge.env.d.ts",
+    "scripts/register-path-aliases.mts",
+    "packages/harness-overlay/src/**/*.css",
+    "resources/**/*.css",
+    "src",
+    "src/**/*.css",
+    "vite.main.config.mts",
+    "vite.preload.config.mts",
+    "vite.renderer.config.mts"
+  ]
+}

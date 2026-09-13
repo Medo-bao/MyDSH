@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "platform": "win32-x64",
+  "bundle": "@firefly-harness/bundle-companion",
+  "plugins": [
+    {
+      "id": "persona-profiles",
+      "package": "@firefly-harness/persona-profiles",
+      "phase": "P2",
+      "owns": ["role-profile-catalog", "profile-selection", "daily-sam-mode", "authors-note", "profile-import-export"],
+      "reuses": ["@deepseek-ai/dsh-persona", "@deepseek-ai/dsh-system-prompt"],
+      "forbids": ["system-prompt-assembler", "agent-loop"]
+    },
+    {
+      "id": "avatar-live2d",
+      "package": "@firefly-harness/avatar-live2d",
+      "phase": "P2",
+      "owns": ["live2d-renderer", "pngtuber-renderer", "pet-window", "avatar-actions", "lip-sync-presentation"],
+      "reuses": ["harness-session-events", "desktop-bridge"],
+      "forbids": ["chat-dom-state-inference", "agent-loop"]
+    },
+    {
+      "id": "voice",
+      "package": "@firefly-harness/voice",
+      "phase": "P3",
+      "owns": ["stt", "tts", "vad", "voice-provider-selection", "audio-cache", "voice-runtime-lifecycle"],
+      "reuses": ["harness-agent-events", "desktop-bridge", "optional-runtime-packs"],
+      "forbids": ["agent-loop", "session-store"]
+    },
+    {
+      "id": "memory",
+      "package": "@firefly-harness/memory",
+      "phase": "P4",
+      "owns": ["derived-personal-memory", "memory-namespaces", "recall-ranking", "memory-decay", "memory-maintenance"],
+      "reuses": ["@deepseek-ai/dsh-session-query", "@deepseek-ai/dsh-session-reference", "harness-session-events"],
+      "forbids": ["raw-session-copy", "second-session-search", "session-store"]
+    },
+    {
+      "id": "lore-firefly",
+      "package": "@firefly-harness/lore-firefly",
+      "phase": "P4",
+      "owns": ["firefly-lore-corpus", "lore-ranking", "curated-facts", "lore-search-tool"],
+      "reuses": ["@deepseek-ai/dsh-skill", "@deepseek-ai/dsh-system-prompt", "@deepseek-ai/dsh-tools"],
+      "forbids": ["skill-registry", "generic-session-search", "system-prompt-assembler"]
+    },
+    {
+      "id": "vision-screen",
+      "package": "@firefly-harness/vision-screen",
+      "phase": "P5",
+      "owns": ["monitor-selection", "window-selection", "screen-capture-consent", "capture-status", "visual-context-bridge"],
+      "reuses": ["@deepseek-ai/dsh-attachment", "@dsh-external/dsh-vision", "desktop-bridge"],
+      "forbids": ["image-store", "image-analysis-tool", "default-ocr-pipeline"]
+    },
+    {
+      "id": "proactive",
+      "package": "@firefly-harness/proactive",
+      "phase": "P5",
+      "owns": ["emotion-policy", "idle-policy", "quiet-hours", "daily-cap", "chinese-reminder-parser", "care-message-style"],
+      "reuses": ["@deepseek-ai/dsh-schedule", "harness-session-events", "desktop-notifications"],
+      "forbids": ["reminder-store", "timer-engine", "schedule-tools"]
+    },
+    {
+      "id": "tasks",
+      "package": "@firefly-harness/tasks",
+      "phase": "P6",
+      "owns": ["cross-session-personal-tasks", "stable-task-ids", "task-lists", "task-archive", "task-history", "task-rollover", "personal_task_tools"],
+      "reuses": ["harness-approval", "harness-client-slots", "desktop-bridge"],
+      "forbids": ["agent-todo", "agent-working-plan", "todo_write"]
+    },
+    {
+      "id": "medomusic",
+      "package": "@firefly-harness/medomusic",
+      "phase": "P7",
+      "owns": ["music-library", "favorites", "playlists", "playback-state", "music-tools"],
+      "reuses": ["harness-approval", "desktop-bridge", "optional-runtime-packs"],
+      "forbids": ["agent-loop", "session-store", "persona-dependency", "voice-dependency"]
+    }
+  ]
+}

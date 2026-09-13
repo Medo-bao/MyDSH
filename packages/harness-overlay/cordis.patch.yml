@@ -1,0 +1,19 @@
+- id: llm-pi-ai
+  disabled: true
+
+- insert:
+    - id: model-runtime
+      name: '@firefly-harness/bundle-companion/model-runtime'
+      config:
+        lmStudio:
+          enabled: true
+          lifecycle: !!js "process.env.MINKE_LM_STUDIO_ENABLED === '1' && process.env.MINKE_LM_STUDIO_COMMAND ? 'ensure-running' : 'external'"
+          command: !!js process.env.MINKE_LM_STUDIO_COMMAND
+          baseURL: !!js process.env.LM_STUDIO_BASE_URL
+        ollama:
+          enabled: true
+          lifecycle: !!js "process.env.MINKE_OLLAMA_ENABLED === '1' && process.env.MINKE_OLLAMA_COMMAND ? 'ensure-running' : 'external'"
+          command: !!js process.env.MINKE_OLLAMA_COMMAND
+          baseURL: !!js process.env.OLLAMA_BASE_URL
+    - id: firefly-companion
+      name: '@firefly-harness/bundle-companion'

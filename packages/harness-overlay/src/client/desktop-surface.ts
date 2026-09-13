@@ -1,0 +1,487 @@
+import {
+  installDesktopSurfaceStyles,
+} from "./desktop-surface.styles.ts";
+import { ChevronLeft, ChevronRight } from "@lucide/icons";
+import { buildLucideDataUri } from "@lucide/icons/build";
+
+const DESKTOP_MARKERS = [
+  "data-dsh-desktop-frame",
+  "data-dsh-desktop-titlebar-anchor",
+  "data-dsh-desktop-sidebar-toggle",
+  "data-dsh-desktop-new-session",
+  "data-dsh-desktop-composer-add",
+  "data-dsh-desktop-composer-primary",
+  "data-dsh-desktop-base-surface",
+  "data-dsh-desktop-sidebar-fade",
+  "data-dsh-desktop-hero-glow",
+  "data-dsh-desktop-resize-handle",
+] as const;
+
+const DESKTOP_MARKER_SELECTOR = DESKTOP_MARKERS
+  .map((marker) => `[${marker}]`)
+  .join(",");
+
+const DESKTOP_DRAG_ENABLED_ATTRIBUTE =
+  "data-dsh-desktop-drag-enabled";
+const DESKTOP_RESIZE_HANDLE_SELECTOR =
+  "[data-dsh-desktop-resize-handle]";
+const DESKTOP_DRAG_TARGET_SELECTOR = [
+  "[data-dsh-desktop-toolbar]",
+].join(",");
+const INTERACTION_LAYER_SELECTOR = [
+  "dialog[open]",
+  '[aria-modal="true"]',
+  '[role="alertdialog"]',
+  '[role="dialog"]',
+  '[role="listbox"]',
+  '[role="menu"]',
+].join(",");
+
+type DesktopSurfaceView = Window & {
+  readonly HTMLElement: typeof HTMLElement;
+  readonly HTMLButtonElement: typeof HTMLButtonElement;
+  readonly MutationObserver: typeof MutationObserver;
+};
+
+export type DesktopToolbarMenuKind = "file" | "edit" | "view" | "help";
+
+export type DesktopSurfaceActions = Readonly<{
+  toggleSidebar(): void;
+  back(): void;
+  forward(): void;
+  showMenu(kind: DesktopToolbarMenuKind, x: number, y: number): void;
+  labels: Readonly<{
+    toggleSidebar: string;
+    back: string;
+    forward: string;
+    file: string;
+    edit: string;
+    view: string;
+    help: string;
+  }>;
+}>;
+
+function toolbarButton(
+  root: Document,
+  label: string,
+  className: string,
+  action: (button: HTMLButtonElement) => void,
+): HTMLButtonElement {
+  const button = root.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.title = label;
+  button.setAttribute("aria-label", label);
+  button.addEventListener("click", () => action(button));
+  return button;
+}
+
+function createDesktopToolbar(
+  root: Document,
+  actions: DesktopSurfaceActions,
+): HTMLElement {
+  const toolbar = root.createElement("header");
+  toolbar.setAttribute("data-dsh-desktop-toolbar", "");
+  toolbar.setAttribute("aria-label", "MyDSH");
+
+  const toggle = toolbarButton(
+    root,
+    actions.labels.toggleSidebar,
+    "firefly-desktop-toolbar__icon firefly-desktop-toolbar__sidebar",
+    () => actions.toggleSidebar(),
+  );
+  toggle.append(root.createElement("span"));
+  toolbar.append(toggle);
+
+  for (const [label, icon, action] of [
+    [actions.labels.back, ChevronLeft, actions.back],
+    [actions.labels.forward, ChevronRight, actions.forward],
+  ] as const) {
+    const button = toolbarButton(
+      root,
+      label,
+      "firefly-desktop-toolbar__icon firefly-desktop-toolbar__arrow",
+      () => action(),
+    );
+    const glyph = root.createElement("span");
+    glyph.setAttribute("aria-hidden", "true");
+    glyph.style.maskImage = `url("${buildLucideDataUri(icon, { size: 18 })}")`;
+    button.append(glyph);
+    toolbar.append(button);
+  }
+
+  for (const kind of ["file", "edit", "view", "help"] as const) {
+    const button = toolbarButton(
+      root,
+      actions.labels[kind],
+      "firefly-desktop-toolbar__menu",
+      (target) => {
+        const rect = target.getBoundingClientRect();
+        actions.showMenu(
+          kind,
+          Math.max(0, Math.round(rect.left)),
+          Math.max(0, Math.round(rect.bottom)),
+        );
+      },
+    );
+    button.textContent = actions.labels[kind];
+    toolbar.append(button);
+  }
+  return toolbar;
+}
+
+function markShell(root: Document, view: DesktopSurfaceView): void {
+  const overlay = root.querySelector("[data-shell-overlay]");
+  const frame = overlay?.parentElement;
+  if (frame === undefined || frame === null) return;
+  frame.setAttribute("data-dsh-desktop-frame", "");
+
+  const sidebarColumn = frame.firstElementChild;
+  const sidebarSlot = sidebarColumn?.querySelector(
+    ':scope > [data-slot="sidebar"]',
+  );
+  const sidebarRoot = sidebarSlot?.firstElementChild;
+  const anchor = sidebarRoot?.firstElementChild;
+  const newSession = anchor?.nextElementSibling;
+  if (
+    anchor instanceof view.HTMLElement &&
+    newSession instanceof view.HTMLButtonElement
+  ) {
+    anchor.setAttribute("data-dsh-desktop-titlebar-anchor", "");
+    const toggle = anchor.querySelector(":scope > button:last-of-type");
+    toggle?.setAttribute("data-dsh-desktop-sidebar-toggle", "");
+    newSession.setAttribute("data-dsh-desktop-new-session", "");
+  }
+
+  const detailsColumn = frame.children.item(2);
+  const detailsSlot = detailsColumn?.querySelector(
+    ':scope > [data-slot="details"]',
+  );
+  const detailsSurface = detailsSlot?.firstElementChild;
+  if (detailsSurface instanceof view.HTMLElement) {
+    detailsSurface.setAttribute("data-dsh-desktop-base-surface", "");
+  }
+
+  for (const candidate of frame.children) {
+    if (
+      candidate instanceof view.HTMLElement &&
+      (candidate.dataset.side === "sidebar" ||
+        candidate.dataset.side === "details")
+    ) {
+      candidate.setAttribute(
+        "data-dsh-desktop-resize-handle",
+        "",
+      );
+    }
+  }
+
+  if (sidebarRoot instanceof view.HTMLElement) {
+    for (const candidate of sidebarRoot.querySelectorAll("span:empty")) {
+      const style = view.getComputedStyle(candidate);
+      if (
+        style.position === "absolute" &&
+        style.pointerEvents === "none" &&
+        style.backgroundImage.includes("linear-gradient")
+      ) {
+        candidate.setAttribute("data-dsh-desktop-sidebar-fade", "");
+      }
+    }
+  }
+}
+
+function markHeroGlow(root: Document): void {
+  for (const candidate of root.querySelectorAll(
+    'svg[viewBox="0 0 1051 468"][aria-hidden="true"]',
+  )) {
+    candidate.setAttribute("data-dsh-desktop-hero-glow", "");
+  }
+}
+
+function markComposerActions(
+  root: Document,
+  view: DesktopSurfaceView,
+): void {
+  for (const card of root.querySelectorAll("[data-composer-card]")) {
+    const row = card.querySelector("[data-input-scroll]")
+      ?.nextElementSibling;
+    if (!(row instanceof view.HTMLElement)) continue;
+
+    const add = row.firstElementChild?.querySelector(
+      'button[aria-haspopup="listbox"]',
+    );
+    if (add instanceof view.HTMLButtonElement) {
+      add.setAttribute("data-dsh-desktop-composer-add", "");
+    }
+
+    const primaryButtons =
+      row.lastElementChild?.querySelectorAll("button");
+    const primary =
+      primaryButtons === undefined
+        ? null
+        : primaryButtons.item(primaryButtons.length - 1);
+    if (primary instanceof view.HTMLButtonElement) {
+      primary.setAttribute(
+        "data-dsh-desktop-composer-primary",
+        "",
+      );
+    }
+  }
+}
+
+function isRendered(element: Element, view: Window): boolean {
+  if (
+    element.hasAttribute("hidden") ||
+    element.getAttribute("aria-hidden") === "true"
+  ) {
+    return false;
+  }
+
+  const style = view.getComputedStyle(element);
+  return (
+    style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    style.visibility !== "collapse" &&
+    style.getPropertyValue("content-visibility") !== "hidden" &&
+    element.getClientRects().length > 0
+  );
+}
+
+function hasOpenPopover(root: Document, view: Window): boolean {
+  try {
+    const popover = root.querySelector(":popover-open");
+    return popover !== null && isRendered(popover, view);
+  } catch {
+    return false;
+  }
+}
+
+function hasPortaledInteractionLayer(
+  root: Document,
+  view: Window,
+): boolean {
+  const body = root.body;
+  if (body === null) return false;
+
+  const appRoot = root.getElementById("root");
+  for (const candidate of body.children) {
+    if (
+      candidate === appRoot ||
+      candidate.matches("[data-dsh-desktop-toolbar]") ||
+      candidate.matches("script, style, link")
+    ) {
+      continue;
+    }
+
+    const style = view.getComputedStyle(candidate);
+    if (
+      style.position === "fixed" &&
+      style.pointerEvents !== "none" &&
+      isRendered(candidate, view)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasDeclaredInteractionLayer(
+  root: Document,
+  view: Window,
+): boolean {
+  const appRoot = root.getElementById("root");
+  if (
+    root.fullscreenElement !== null ||
+    (appRoot !== null && appRoot.inert)
+  ) {
+    return true;
+  }
+
+  for (const candidate of root.querySelectorAll(
+    INTERACTION_LAYER_SELECTOR,
+  )) {
+    if (isRendered(candidate, view)) return true;
+  }
+
+  return (
+    hasOpenPopover(root, view) ||
+    hasPortaledInteractionLayer(root, view)
+  );
+}
+
+function hasOccludedDragTarget(
+  root: Document,
+  view: Window,
+): boolean {
+  const targets = [
+    ...root.querySelectorAll(DESKTOP_DRAG_TARGET_SELECTOR),
+  ].filter((target) => isRendered(target, view));
+
+  for (const target of targets) {
+    const rect = target.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+
+    const xInset = Math.min(4, rect.width / 2);
+    const yInset = Math.min(4, rect.height / 2);
+    const xs = [
+      rect.left + xInset,
+      rect.left + rect.width / 2,
+      rect.right - xInset,
+    ];
+    const ys = [
+      rect.top + yInset,
+      rect.top + rect.height / 2,
+      rect.bottom - yInset,
+    ];
+
+    for (const x of xs) {
+      for (const y of ys) {
+        const top = root.elementFromPoint(x, y);
+        if (
+          top !== null &&
+          top.closest(DESKTOP_RESIZE_HANDLE_SELECTOR) === null &&
+          !targets.some(
+            (candidate) =>
+              candidate.contains(top) || top.contains(candidate),
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function dragIsSafe(root: Document, view: Window): boolean {
+  return (
+    !hasDeclaredInteractionLayer(root, view) &&
+    !hasOccludedDragTarget(root, view)
+  );
+}
+
+function suspendDesktopDrag(root: Document): void {
+  root.documentElement.removeAttribute(
+    DESKTOP_DRAG_ENABLED_ATTRIBUTE,
+  );
+}
+
+function reconcileDesktopDrag(root: Document, view: Window): void {
+  root.documentElement.toggleAttribute(
+    DESKTOP_DRAG_ENABLED_ATTRIBUTE,
+    dragIsSafe(root, view),
+  );
+}
+
+function clearDesktopMarkers(root: Document): void {
+  suspendDesktopDrag(root);
+  for (const element of root.querySelectorAll(DESKTOP_MARKER_SELECTOR)) {
+    for (const marker of DESKTOP_MARKERS) {
+      element.removeAttribute(marker);
+    }
+  }
+}
+
+/**
+ * Project MyDSH's Windows surface onto the upstream Harness DOM.
+ *
+ * The document-start extension owns first-paint layout and a fail-safe
+ * no-drag default. This adapter enables native drag only while the current
+ * DOM has no interactive layer over it, and releases all state through the
+ * Harness plugin lifecycle.
+ */
+export function installDesktopSurface(
+  root: Document = document,
+  actions?: DesktopSurfaceActions,
+): () => void {
+  const view = root.defaultView as DesktopSurfaceView | null;
+  if (view === null) return () => {};
+
+  const disposeStyles = installDesktopSurfaceStyles(root);
+  root.documentElement.setAttribute("data-dsh-desktop-surface", "windows");
+  const toolbar = actions === undefined
+    ? undefined
+    : createDesktopToolbar(root, actions);
+  if (toolbar !== undefined) root.body.prepend(toolbar);
+  let frame: number | undefined;
+  let disposed = false;
+
+  const reconcile = (): void => {
+    frame = undefined;
+    if (disposed) return;
+    markShell(root, view);
+    markHeroGlow(root);
+    markComposerActions(root, view);
+    reconcileDesktopDrag(root, view);
+  };
+  const scheduleReconcile = (): void => {
+    if (disposed || frame !== undefined) return;
+    frame = view.requestAnimationFrame(reconcile);
+  };
+
+  const observer = new view.MutationObserver(() => {
+    if (hasDeclaredInteractionLayer(root, view)) {
+      suspendDesktopDrag(root);
+    }
+    scheduleReconcile();
+  });
+  observer.observe(root.documentElement, {
+    attributes: true,
+    attributeFilter: [
+      "aria-hidden",
+      "aria-modal",
+      "class",
+      "hidden",
+      "inert",
+      "open",
+      "popover",
+      "role",
+      "style",
+    ],
+    childList: true,
+    subtree: true,
+  });
+
+  const handleBeforeToggle = (event: Event): void => {
+    if (Reflect.get(event, "newState") === "open") {
+      suspendDesktopDrag(root);
+    }
+    scheduleReconcile();
+  };
+  const handleLayerStateChange = (): void => {
+    if (
+      root.fullscreenElement !== null ||
+      hasOpenPopover(root, view)
+    ) {
+      suspendDesktopDrag(root);
+    }
+    scheduleReconcile();
+  };
+  root.addEventListener("beforetoggle", handleBeforeToggle, true);
+  root.addEventListener("toggle", handleLayerStateChange, true);
+  root.addEventListener(
+    "fullscreenchange",
+    handleLayerStateChange,
+    true,
+  );
+  scheduleReconcile();
+
+  return () => {
+    disposed = true;
+    observer.disconnect();
+    root.removeEventListener("beforetoggle", handleBeforeToggle, true);
+    root.removeEventListener("toggle", handleLayerStateChange, true);
+    root.removeEventListener(
+      "fullscreenchange",
+      handleLayerStateChange,
+      true,
+    );
+    if (frame !== undefined) {
+      view.cancelAnimationFrame(frame);
+      frame = undefined;
+    }
+    clearDesktopMarkers(root);
+    toolbar?.remove();
+    root.documentElement.removeAttribute("data-dsh-desktop-surface");
+    disposeStyles();
+  };
+}

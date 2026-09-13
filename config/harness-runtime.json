@@ -1,0 +1,18 @@
+{
+  "repository": "deepseek-ai/deepseek-harness",
+  "submodulePath": "vendor/deepseek-harness",
+  "commit": "fb2c4b9e698e30edb738bca4cf0618587db7d203",
+  "packageName": "@deepseek-ai/dsh",
+  "packageVersion": "0.1.5-rc.2",
+  "frontendPackageName": "@deepseek-ai/dsh-web-frontend",
+  "pnpmVersion": "11.7.0",
+  "runtimeSizeBudgetBytes": {
+    "win32": 268435456
+  },
+  "runtimeFileBudget": 15000,
+  "productBundle": {
+    "packageName": "@firefly-harness/bundle-companion",
+    "packagePath": "packages/harness-overlay",
+    "patch": "cordis.patch.yml"
+  }
+}

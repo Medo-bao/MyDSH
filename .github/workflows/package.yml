@@ -1,0 +1,126 @@
+name: Package Windows x64
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-windows-x64-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Package Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 120
+    env:
+      CI: "true"
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          architecture: x64
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            vendor/deepseek-harness/pnpm-lock.yaml
+
+      - name: Verify Windows x64 runner
+        shell: pwsh
+        run: node -e "if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Expected win32-x64, received ' + process.platform + '-' + process.arch)"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Harness dependencies
+        run: pnpm --dir vendor/deepseek-harness install --recursive --frozen-lockfile --config.node-linker=isolated
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test Windows x64 desktop
+        run: pnpm test:desktop
+
+      - name: Prepare short package temp
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path 'D:\t' | Out-Null
+
+      - name: Make Windows x64 distributables
+        env:
+          TEMP: D:\t
+          TMP: D:\t
+          SQUIRREL_TEMP: D:\t
+        run: |
+          pnpm package
+          pnpm nsis:make --publish never
+
+      - name: Upload Windows x64 distributables
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mydsh-win32-x64
+          path: out/nsis/*Setup.exe
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  release:
+    name: Publish Windows x64 release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Windows x64 distributables
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mydsh-win32-x64
+          path: release-artifacts
+
+      - name: Stage stable installer name and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir release-assets
+          mapfile -d '' installers < <(find release-artifacts -type f -name '*Setup.exe' -print0)
+          if (( ${#installers[@]} != 1 )); then
+            echo "Expected one Windows x64 setup executable, found ${#installers[@]}" >&2
+            exit 1
+          fi
+          cp -- "${installers[0]}" release-assets/MyDSH-windows-x64-Setup.exe
+          (cd release-assets && sha256sum MyDSH-windows-x64-Setup.exe > SHA256SUMS)
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' assets < <(find release-assets -type f -print0 | sort -z)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release already published; preserving its verified assets."
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+              --verify-tag \
+              --generate-notes \
+              --title "MyDSH $GITHUB_REF_NAME"
+          fi

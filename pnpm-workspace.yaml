@@ -1,0 +1,33 @@
+packages:
+  - "."
+  - "packages/*"
+
+enableGlobalVirtualStore: false
+
+# Keep Forge's nested rebuild on the npm-published version used by the app.
+# The older 3.x line fetches @electron/node-gyp through Git and is not portable.
+blockExoticSubdeps: false
+
+# Electron Forge needs dependencies resolvable from a flat node_modules tree.
+nodeLinker: hoisted
+
+overrides:
+  '@codemirror/view': 6.43.9
+  '@electron/rebuild': 4.2.0
+  yauzl: 3.4.0
+
+allowBuilds:
+  '@google/genai': false
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  fs-xattr: false
+  macos-alias: false
+  node-pty: true
+  protobufjs: false
+
+minimumReleaseAgeExclude:
+  - '@codemirror/view@6.43.9'
+
+patchedDependencies:
+  '@electron-forge/core@7.11.2': patches/@electron-forge__core@7.11.2.patch
