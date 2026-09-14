@@ -1,9 +1,6 @@
 import {
   normalizeWebTabUrl,
 } from "@minke/harness-overlay/tabs/contract.ts";
-import type {
-  WebTabsController,
-} from "./controller.ts";
 
 function anchorFromClick(
   event: MouseEvent,
@@ -22,12 +19,11 @@ function anchorFromClick(
 }
 
 /**
- * Turn safe HTTP(S) anchors anywhere in the Harness surface into Web tabs.
- * Modified primary clicks retain familiar browser semantics by opening the
- * tab in the background.
+ * Open external HTTP(S) anchors through the desktop's default browser bridge.
+ * Local navigation and downloads retain their existing handlers.
  */
-export function installWebLinkTabs(
-  controller: WebTabsController,
+export function installExternalWebLinks(
+  openExternal: (url: string) => void,
   root: Document = document,
 ): () => void {
   const view = root.defaultView;
@@ -36,7 +32,7 @@ export function installWebLinkTabs(
   const handleClick = (event: MouseEvent): void => {
     if (
       event.defaultPrevented ||
-      event.button !== 0 ||
+      (event.button !== 0 && event.button !== 1) ||
       event.altKey
     ) {
       return;
@@ -50,18 +46,17 @@ export function installWebLinkTabs(
     }
     const url = normalizeWebTabUrl(anchor.href);
     if (url === undefined) return;
+    if (new URL(url).origin === view.location.origin) return;
 
     event.preventDefault();
     event.stopPropagation();
-    controller.open(
-      url,
-      anchor.textContent ?? undefined,
-      { activate: !(event.metaKey || event.ctrlKey) },
-    );
+    openExternal(url);
   };
 
   root.addEventListener("click", handleClick, true);
+  root.addEventListener("auxclick", handleClick, true);
   return () => {
     root.removeEventListener("click", handleClick, true);
+    root.removeEventListener("auxclick", handleClick, true);
   };
 }

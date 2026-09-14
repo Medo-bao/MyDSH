@@ -40,7 +40,7 @@ The current distribution target is Windows x64. Obtain installers from the proje
 
 ### Windows
 
-1. Download the Windows x64 `.exe` installer from [MyDSH releases](https://github.com/Medo-bao/MyDSH/releases). The current version is **0.0.3**.
+1. Download the Windows x64 `.exe` installer from [MyDSH releases](https://github.com/Medo-bao/MyDSH/releases). The current version is **0.0.4**.
 2. Run the installer and follow the on-screen instructions.
 3. Windows may show a reputation-based warning for a new pre-release build. Verify the source and SHA-256 before continuing.
 

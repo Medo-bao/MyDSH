@@ -1386,7 +1386,7 @@ test("webview attachment overwrites untrusted guest preferences", () => {
   );
 });
 
-test("attached Web guests keep navigation isolated and deny popups", () => {
+test("attached Web guest links open externally while unsafe popups are denied", () => {
   const listeners = new Map();
   const opened = [];
   let openWindow;
@@ -1413,7 +1413,8 @@ test("attached Web guests keep navigation isolated and deny popups", () => {
       prevented = true;
     },
   });
-  assert.equal(prevented, false);
+  assert.equal(prevented, true);
+  assert.deepEqual(opened, ["https://example.com/next"]);
 
   listeners.get("will-redirect")({
     isMainFrame: true,
@@ -1423,12 +1424,13 @@ test("attached Web guests keep navigation isolated and deny popups", () => {
     },
   });
   assert.equal(prevented, true);
-  assert.deepEqual(opened, ["mailto:hello@example.com"]);
+  assert.deepEqual(opened, ["https://example.com/next", "mailto:hello@example.com"]);
   assert.deepEqual(
     openWindow({ url: "https://example.com/popup" }),
     { action: "deny" },
   );
   assert.deepEqual(opened, [
+    "https://example.com/next",
     "mailto:hello@example.com",
     "https://example.com/popup",
   ]);
@@ -1436,7 +1438,7 @@ test("attached Web guests keep navigation isolated and deny popups", () => {
     openWindow({ url: "javascript:alert(1)" }),
     { action: "deny" },
   );
-  assert.equal(opened.length, 2);
+  assert.equal(opened.length, 3);
 });
 
 test("Tabs is content-agnostic and preserves hidden tab state", () => {

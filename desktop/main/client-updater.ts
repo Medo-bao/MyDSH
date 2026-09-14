@@ -21,6 +21,15 @@ export interface ClientUpdateSource {
   apiUrl: string;
 }
 
+export type UpdateFetch = (url: string, options?: RequestInit) => Promise<Response>;
+
+function failureDetails(error: unknown, depth = 0): string {
+  if (!(error instanceof Error)) return String(error);
+  const code = (error as NodeJS.ErrnoException).code;
+  const message = `${error.message}${code ? ` (${code})` : ""}`;
+  return error.cause !== undefined && depth < 3 ? `${message}: ${failureDetails(error.cause, depth + 1)}` : message;
+}
+
 export interface ClientUpdate {
   version: string;
   source: ClientUpdateSource;
@@ -38,14 +47,17 @@ export class ClientUpdater {
   readonly #currentVersion: string;
   readonly #updatesRoot: string;
   readonly #sources: readonly ClientUpdateSource[];
+  readonly #fetch: UpdateFetch;
 
   constructor(options: {
     currentVersion: string;
     updatesRoot: string;
     sources: readonly ClientUpdateSource[];
+    fetch?: UpdateFetch;
   }) {
     this.#currentVersion = options.currentVersion;
     this.#updatesRoot = options.updatesRoot;
+    this.#fetch = options.fetch ?? ((url, init) => fetch(url, init));
     this.#sources = options.sources.filter((source) => source.apiUrl.trim() !== "");
   }
 
@@ -82,11 +94,11 @@ export class ClientUpdater {
         }
       } catch (error) {
         signal?.throwIfAborted();
-        errors.push(error);
+        errors.push(new Error(`${source.name}: ${failureDetails(error)}`));
       }
     }
     if (errors.length === this.#sources.length) {
-      throw new AggregateError(errors, "All desktop update sources failed");
+      throw new AggregateError(errors, `All desktop update sources failed\n${errors.map(error => failureDetails(error)).join("\n")}`);
     }
     return candidate;
   }
@@ -109,11 +121,11 @@ export class ClientUpdater {
     for (const mirror of mirrors) {
       try {
         options.progress?.("downloading", 0);
-        const payload = await fetchBuffer(mirror.installerUrl, options.signal, percent => options.progress?.("downloading", percent));
+        const payload = await fetchBuffer(this.#fetch, mirror.installerUrl, options.signal, percent => options.progress?.("downloading", percent));
         await writeFile(partialPath, payload);
         options.progress?.("verifying");
         if (mirror.checksumUrl !== undefined) {
-          const checksumText = (await fetchBuffer(mirror.checksumUrl, options.signal)).toString("utf8");
+          const checksumText = (await fetchBuffer(this.#fetch, mirror.checksumUrl, options.signal)).toString("utf8");
           const expected = checksumFor(checksumText, update.installerName);
           if (expected === undefined) {
             throw new Error("Release checksum list does not include the selected installer");
@@ -129,12 +141,12 @@ export class ClientUpdater {
         await access(finalPath);
         return finalPath;
       } catch (error) {
-        failures.push(error);
+        failures.push(new Error(`${mirror.source.name}: ${failureDetails(error)}`));
         await rm(partialPath, { force: true });
         options.signal?.throwIfAborted();
       }
     }
-    throw new AggregateError(failures, "All desktop update downloads failed");
+    throw new AggregateError(failures, `All desktop update downloads failed\n${failures.map(error => failureDetails(error)).join("\n")}`);
   }
 
   async launchInstaller(installerPath: string): Promise<void> {
@@ -153,10 +165,10 @@ export class ClientUpdater {
   }
 
   async #checkSource(source: ClientUpdateSource, signal?: AbortSignal): Promise<ClientUpdate | undefined> {
-    const response = await fetch(source.apiUrl, {
+    const response = await this.#fetch(source.apiUrl, {
       headers: {
         accept: "application/json",
-        "user-agent": "DeepSeek-Harness-Desktop-Updater",
+        "user-agent": "MyDSH-Updater",
       },
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
     });
@@ -210,8 +222,8 @@ function isInstaller(name: unknown): boolean {
   return !normalized.includes("arm64") && !normalized.includes("x86");
 }
 
-async function fetchBuffer(url: string, signal?: AbortSignal, progress?: (percent?: number) => void): Promise<Buffer> {
-  const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000) });
+async function fetchBuffer(fetchRequest: UpdateFetch, url: string, signal?: AbortSignal, progress?: (percent?: number) => void): Promise<Buffer> {
+  const response = await fetchRequest(url, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000) });
   if (!response.ok) throw new Error(`Update download failed with HTTP ${String(response.status)}`);
   const total = Number(response.headers.get("content-length"));
   if (!response.body) throw new Error("Update download returned an empty response");

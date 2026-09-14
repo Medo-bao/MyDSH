@@ -6,6 +6,7 @@ import {
   Menu,
   nativeImage,
   nativeTheme,
+  net,
   Notification,
   session,
   shell,
@@ -872,6 +873,7 @@ async function bootstrap(): Promise<void> {
     currentVersion: app.getVersion(),
     updatesRoot: join(app.getPath("userData"), "updates", "client"),
     sources: configuredClientUpdateSources(process.env),
+    fetch: (url, options) => net.fetch(url, options),
   });
   runtime = new HarnessRuntime({
     packageManagerBin: await preparePackageManagerBin(dshHome, systemRuntime),

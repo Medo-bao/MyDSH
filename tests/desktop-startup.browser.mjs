@@ -39,11 +39,16 @@ try {
   }
   assert.ok(loaded, "Desktop did not reach the Harness UI within 180 seconds");
   await loaded.locator("[data-dsh-desktop-toolbar]").waitFor();
+  assert.equal(await loaded.locator("[data-minke-about-trigger]").count(), 0, "Retired About popup must not be mounted");
   const deferSetup = loaded.getByRole("button", { name: "稍后配置", exact: true });
   await deferSetup.waitFor({ state: "visible", timeout: 5000 }).catch(() => {});
   if (await deferSetup.isVisible()) await deferSetup.click();
   const originallyCollapsed = await loaded.locator("[data-sidebar-collapsed]").count() > 0;
   const sidebarToggle = loaded.locator("[data-dsh-desktop-sidebar-toggle]");
+  const customSidebar = process.env.MYDSH_TEST_CUSTOM_SIDEBAR === "1";
+  if (customSidebar) {
+    console.log("SKIP upstream sidebar geometry: explicitly testing a user theme with a custom sidebar");
+  } else {
   for (const viewport of [{ width: 1280, height: 800 }, { width: 960, height: 640 }]) {
     await loaded.setViewportSize(viewport);
     if (await loaded.locator("[data-sidebar-collapsed]").count()) {
@@ -77,6 +82,7 @@ try {
   if (!originallyCollapsed) {
     await sidebarToggle.click();
     await loaded.locator("[data-sidebar-collapsed]").waitFor({ state: "detached" });
+  }
   }
   for (const viewport of [{ width: 1280, height: 800 }, { width: 960, height: 640 }]) {
     await loaded.setViewportSize(viewport);
@@ -115,7 +121,9 @@ try {
     assert.ok(bounds, "Settings panel must be visible");
     assert.ok(bounds.y >= 68, `Settings top must clear the caption and keep its margin: ${bounds.y}`);
     assert.ok(bounds.y + bounds.height <= viewport.height - 24, "Settings bottom must keep its margin");
-    assert.ok(bounds.x >= 24 && bounds.x + bounds.width <= viewport.width - 24);
+    const horizontalMargin = customSidebar ? 0 : 24;
+    assert.ok(bounds.x >= horizontalMargin && bounds.x + bounds.width <= viewport.width - horizontalMargin,
+      `Settings must fit within the viewport: ${JSON.stringify(bounds)}`);
   }
   const mask = await loaded.evaluate(() => {
     const toolbar = document.querySelector("[data-dsh-desktop-toolbar]");
@@ -128,8 +136,12 @@ try {
   });
   assert.equal(mask.content, '\"\"');
   assert.notEqual(mask.blur, "none");
-  assert.equal(mask.blur, mask.expectedBlur);
-  assert.equal(mask.background, mask.expectedBackground);
+  if (!customSidebar) {
+    assert.equal(mask.blur, mask.expectedBlur);
+    assert.equal(mask.background, mask.expectedBackground);
+  } else {
+    console.log("Custom theme mask audit (upstream visual equality not required):", mask);
+  }
   assert.equal(await loaded.locator("[data-firefly-brand-name]").count(), 0);
   assert.equal(await loaded.locator("[data-dsh-desktop-toolbar]").evaluate((element) => getComputedStyle(element).borderBottomWidth), "0px");
   for (const name of ["内置插件", "余额", "自定义提示词", "对话调整", "视觉", "侧边会话"]) {
@@ -150,7 +162,7 @@ try {
     const section = document.querySelector(".firefly-market-management");
     return /^\d+\.\d+\.\d+/u.test([...section.querySelectorAll("dd")].at(-1)?.textContent ?? "") || section.querySelector('[role="alert"]');
   }, null, { timeout: 25_000 });
-  await management.locator("dd").first().filter({ hasText: "0.0.3" }).waitFor({ timeout: 30_000 });
+  await management.locator("dd").first().filter({ hasText: "0.0.4" }).waitFor({ timeout: 30_000 });
   await management.locator("dd").nth(1).filter({ hasText: /^\d+\.\d+\.\d+/u }).waitFor({ timeout: 5000 });
   await management.locator("dd").nth(2).filter({ hasText: /^\d+\.\d+\.\d+/u }).waitFor({ timeout: 5000 });
   assert.equal(await management.getByRole("link", { name: "GitHub 仓库" }).getAttribute("href"), "https://github.com/dsh-market/dsh-market");
@@ -179,7 +191,7 @@ try {
   }
   await loaded.getByRole("button", { name: "通用设置", exact: true }).click();
   await loaded.getByRole("navigation").getByRole("button", { name: "关于 MyDSH", exact: true }).click();
-  await management.locator("dd").first().filter({ hasText: "0.0.3" }).waitFor();
+  await management.locator("dd").first().filter({ hasText: "0.0.4" }).waitFor();
   const settingsDialog = loaded.getByRole("dialog", { name: "设置", exact: true });
   await settingsDialog.getByRole("button").first().focus();
   const escapedFocus = [];
@@ -235,6 +247,16 @@ try {
   console.log("Upstream settings and desktop chrome remain; all optional plugin settings are absent.");
   console.log("Packaged Electron reached the Harness UI using the existing user profile.");
   for (const context of browser.contexts()) for (const page of context.pages()) await page.close();
+} catch (error) {
+  for (const context of browser?.contexts() ?? []) for (const page of context.pages()) {
+    await page.screenshot({ path: "docs/research/desktop-startup-failure.png" }).catch(() => {});
+    console.error("Desktop failure state:", await page.evaluate(() => ({
+      title: document.title, sidebar: document.querySelectorAll('[data-slot="sidebar"]').length,
+      toggles: document.querySelectorAll('[data-dsh-desktop-sidebar-toggle]').length,
+      dialogs: [...document.querySelectorAll('[role="dialog"]')].map(node => node.getAttribute("aria-label")),
+    })).catch(() => ({})));
+  }
+  throw error;
 } finally {
   for (let count = 0; count < 10 && child.exitCode === null; count++) await delay(500);
   if (child.exitCode === null) {

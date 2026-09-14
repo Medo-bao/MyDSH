@@ -2,7 +2,7 @@ export {
   WebTabsController,
 } from "./controller.ts";
 export {
-  installWebLinkTabs,
+  installExternalWebLinks,
 } from "./interceptor.ts";
 export {
   webTabsEn,

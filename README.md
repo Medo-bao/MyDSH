@@ -30,7 +30,7 @@ MyDSH 在本地运行 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek
 
 ## 安装
 
-当前版本为 **0.0.3**，只提供 Windows x64 安装包。请从 [MyDSH 发布页](https://github.com/Medo-bao/MyDSH/releases) 下载，并核对随包的 SHA-256 清单。
+当前版本为 **0.0.4**，只提供 Windows x64 安装包。请从 [MyDSH 发布页](https://github.com/Medo-bao/MyDSH/releases) 下载，并核对随包的 SHA-256 清单。
 
 运行前需要系统 PATH 中有 Node.js 24+、Corepack/pnpm 11.7.0 和 `@deepseek-ai/dsh@0.1.5-rc.2`。安装包不包含这三项运行环境。托盘只检查 MyDSH 桌面端更新，不检查或安装上游 Harness 更新。插件市场按需安装，不默认预装；上游名称保留，桌面图标使用 MyDSH 品牌。
 

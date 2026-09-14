@@ -3,21 +3,12 @@ import { MarketManagement, installMarketManagementStyles, marketZh, marketEn, ty
 import {
   DEFAULT_SHORTCUT_BINDINGS,
 } from "@minke/harness-overlay/shortcut-contract.ts";
-import {
-  aboutEn,
-  aboutZh,
-  installAboutStyles,
-  MinkeAboutDialog,
-  type AboutLocaleKey,
-  type AboutTranslate,
-} from "./about/index.tsx";
 import { openHarnessSettings } from "./actions.ts";
 import {
   FireflyBrandMark,
   type FireflyBrandMarkProps,
 } from "./Brand.tsx";
 import {
-  desktopAboutInfo,
   desktopFilesPort,
   desktopModelRuntimeSettingsStore,
   desktopSessionLogsPort,
@@ -29,7 +20,6 @@ import {
   desktopWindowMenuPort,
   desktopWindowThemePort,
   hasWindowsDesktopSurface,
-  type DesktopAboutInfo,
   type HarnessColorScheme,
   type HarnessLocale,
   type HarnessThemePreference,
@@ -81,7 +71,7 @@ import {
 } from "./tabs/files/index.ts";
 import {
   createWebTabRenderer,
-  installWebLinkTabs,
+  installExternalWebLinks,
   installWebTabStyles,
   webTabsEn,
   webTabsZh,
@@ -143,20 +133,6 @@ interface SlotService {
       priority: -100;
     },
     component: ComponentType<FireflyBrandMarkProps>,
-  ): unknown;
-  register(
-    options: {
-      name: "sidebar.footer.action";
-      id: "minke-about";
-      order: number;
-      label: () => string;
-      locale: string;
-      inject: () => {
-        info: DesktopAboutInfo;
-        openExternal(url: string): void;
-      };
-    },
-    component: ComponentType<never>,
   ): unknown;
   register(
     options: {
@@ -284,7 +260,6 @@ interface HarnessClientContext {
 }
 
 const NAMESPACE = "minke.shortcuts";
-const ABOUT_NAMESPACE = "minke.about";
 const TABS_NAMESPACE = "minke.tabs";
 const FILES_TABS_NAMESPACE = "minke.tabs.files";
 const WEB_TABS_NAMESPACE = "minke.tabs.web";
@@ -342,42 +317,6 @@ export function apply(ctx: HarnessClientContext): void {
   }
 
   const tabsPort = desktopTabsPort();
-  const aboutInfo = desktopAboutInfo();
-  if (aboutInfo.available) {
-    ctx.effect(
-      () =>
-        ctx.locale.register(ABOUT_NAMESPACE, {
-          zh: aboutZh,
-          en: aboutEn,
-        }),
-      "minke-overlay: About dictionaries",
-    );
-    const aboutT = ctx.locale.bind<AboutLocaleKey>(
-      ABOUT_NAMESPACE,
-    ) as AboutTranslate;
-    ctx.effect(
-      () => installAboutStyles(),
-      "minke-overlay: About styles",
-    );
-    ctx.slots.inject("sidebar.footer.action", () =>
-      ctx.slots.register(
-        {
-          name: "sidebar.footer.action",
-          id: "minke-about",
-          order: 100,
-          label: () => aboutT("trigger"),
-          locale: ABOUT_NAMESPACE,
-          inject: () => ({
-            info: aboutInfo,
-            openExternal: (url: string) => {
-              tabsPort.openExternal(url);
-            },
-          }),
-        },
-        MinkeAboutDialog as ComponentType<never>,
-      ),
-    );
-  }
   const filesPort = desktopFilesPort();
   const terminalPort = desktopTerminalPort();
   const terminalSettingsStore = desktopTerminalSettingsStore();
@@ -632,8 +571,8 @@ export function apply(ctx: HarnessClientContext): void {
       "bottom",
     );
     ctx.effect(
-      () => installWebLinkTabs(rightWorkspace.webTabs),
-      "minke-overlay: Web link tabs",
+      () => installExternalWebLinks(url => tabsPort.openExternal(url)),
+      "minke-overlay: external web links",
     );
     ctx.slots.inject("shell.overlay", () =>
       ctx.slots.register(

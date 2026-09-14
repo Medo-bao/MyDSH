@@ -2,16 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  aboutMetadata,
-  aboutTagline,
   DEEPSEEK_HARNESS_URL,
   MINKE_PROJECT_URL,
   platformLabel,
 } from "@minke/harness-overlay/client/about/model.ts";
-import {
-  en as aboutEn,
-  zh as aboutZh,
-} from "@minke/harness-overlay/client/about/locales.ts";
 import {
   desktopAboutInfo,
 } from "@minke/harness-overlay/client/bridge.ts";
@@ -71,23 +65,9 @@ const shortcutStylesSource = readFileSync(
   ),
   "utf8",
 );
-const aboutStylesSource = readFileSync(
-  new URL(
-    "../packages/harness-overlay/src/client/about/styles.css",
-    import.meta.url,
-  ),
-  "utf8",
-);
 const desktopSurfaceStylesSource = readFileSync(
   new URL(
     "../packages/harness-overlay/src/client/desktop-surface.css",
-    import.meta.url,
-  ),
-  "utf8",
-);
-const aboutViewSource = readFileSync(
-  new URL(
-    "../packages/harness-overlay/src/client/about/view.tsx",
     import.meta.url,
   ),
   "utf8",
@@ -322,7 +302,7 @@ test("the built client half is a Harness module-loader bundle", () => {
     bundle,
     /minke-overlay: \$\{placement\} Web tab renderer/u,
   );
-  assert.match(bundle, /minke-overlay: Web link tabs/u);
+  assert.match(bundle, /minke-overlay: external web links/u);
   assert.match(bundle, /minke-overlay: session header action styles/u);
   assert.match(bundle, /minke-tabs-toggle/u);
   assert.match(bundle, /minkeDesktop\?\.sessionLogs/u);
@@ -330,8 +310,8 @@ test("the built client half is a Harness module-loader bundle", () => {
   assert.match(bundle, /conversation\.session\.header\.utilities/u);
   assert.match(bundle, /minke-tabs-panel/u);
   assert.match(bundle, /sidebar\.footer\.action/u);
-  assert.match(bundle, /data-minke-about-trigger/u);
-  assert.match(bundle, /data-minke-about-dialog/u);
+  assert.doesNotMatch(bundle, /data-minke-about-trigger/u);
+  assert.doesNotMatch(bundle, /data-minke-about-dialog/u);
   assert.match(bundle, /data:image\/png;base64/u);
   assert.doesNotMatch(bundle, /require\(["']@deepseek-ai\//u);
 });
@@ -369,142 +349,17 @@ test("desktop branding uses Harness slots and keeps collapsed controls aligned",
   );
 });
 
-test("About uses the public sidebar action and packaged desktop metadata", () => {
-  assert.match(
-    clientSource,
-    /ctx\.slots\.inject\("sidebar\.footer\.action"[\s\S]*name:\s*"sidebar\.footer\.action"[\s\S]*id:\s*"minke-about"[\s\S]*order:\s*100/u,
-  );
-  assert.match(clientSource, /desktopAboutInfo\(\)/u);
-  assert.match(clientSource, /installAboutStyles\(\)/u);
-  assert.match(
-    overlayBuildSource,
-    /loader:\s*\{[\s\S]*"\.png":\s*"dataurl"/u,
-  );
-
-  const info = desktopAboutInfo({
-    minkeDesktop: {
-      about: {
-        productName: "Minke",
-        version: "0.1.0",
-        platform: "win32",
-        arch: "x64",
-      },
-    },
-  });
-  assert.deepEqual(info, {
-    available: true,
-    productName: "Minke",
-    version: "0.1.0",
-    platform: "win32",
-    arch: "x64",
-  });
-  assert.equal(platformLabel(info.platform), "Windows");
-
-  const t = (key, params) =>
-    aboutZh[key].replace(/\{(\w+)\}/gu, (match, name) =>
-      params !== undefined && Object.hasOwn(params, name)
-        ? String(params[name])
-        : match,
-    );
-  assert.equal(
-    aboutMetadata(info, t),
-    "版本 0.1.0 · Windows · x64",
-  );
-  assert.deepEqual(aboutTagline(t), [
-    "为 ",
-    " 打造的原生桌面工作空间",
+test("About is consolidated in settings without the retired sidebar popup", () => {
+  assert.doesNotMatch(clientSource, /id:\s*"minke-about"|installAboutStyles/u);
+  assert.doesNotMatch(bundle, /data-minke-about-dialog|minke-about__trigger/u);
+  assert.match(clientSource, /id: "firefly-market-management"/u);
+  assert.deepEqual([MINKE_PROJECT_URL, DEEPSEEK_HARNESS_URL], [
+    "https://github.com/Medo-bao/MyDSH", "https://github.com/deepseek-ai/deepseek-harness",
   ]);
-  assert.match(aboutViewSource, /data-minke-about-dialog/u);
-  assert.match(aboutViewSource, /role="dialog"/u);
-  assert.match(aboutViewSource, /aria-modal="true"/u);
-  assert.match(aboutViewSource, /aria-label=\{info\.productName\}/u);
-  assert.match(aboutViewSource, /aria-describedby=/u);
-  assert.match(aboutViewSource, /event\.key === "Escape"/u);
-  assert.match(aboutViewSource, /event\.key !== "Tab"/u);
-  assert.match(aboutViewSource, /triggerRef\.current\?\.focus\(\)/u);
-  assert.match(aboutViewSource, /t\("iconAlt"\)/u);
-  assert.match(aboutViewSource, /t\("community"\)/u);
-  assert.match(aboutViewSource, /t\("project"\)/u);
-  assert.match(aboutViewSource, /t\("harness"\)/u);
-  assert.match(aboutViewSource, /function GitHubMark/u);
-  assert.doesNotMatch(
-    aboutViewSource,
-    /minke-about__description|minke-about__title|t\("description"\)/u,
-  );
-  assert.match(
-    aboutViewSource,
-    /minke-about__copy[\s\S]*minke-about__actions[\s\S]*minke-about__community/u,
-  );
-  assert.doesNotMatch(
-    aboutViewSource,
-    /icon=\{ExternalLink\}|t\("license"\)/u,
-  );
-
-  assert.equal(aboutEn.trigger, "About MyDSH");
-  assert.equal(aboutZh.trigger, "关于 MyDSH");
-  assert.equal(
-    aboutEn.tagline,
-    "A native desktop workspace for {harness}",
-  );
-  assert.equal(
-    aboutZh.tagline,
-    "为 {harness} 打造的原生桌面工作空间",
-  );
-  assert.equal(aboutEn.project, "MyDSH");
-  assert.equal(aboutZh.project, "MyDSH");
-  assert.equal(Object.hasOwn(aboutEn, "title"), false);
-  assert.equal(Object.hasOwn(aboutZh, "title"), false);
-  assert.equal(Object.hasOwn(aboutEn, "description"), false);
-  assert.equal(Object.hasOwn(aboutZh, "description"), false);
-  assert.equal(Object.hasOwn(aboutEn, "license"), false);
-  assert.equal(Object.hasOwn(aboutZh, "license"), false);
-  assert.deepEqual(
-    [MINKE_PROJECT_URL, DEEPSEEK_HARNESS_URL],
-    [
-      "https://github.com/Medo-bao/MyDSH",
-      "https://github.com/deepseek-ai/deepseek-harness",
-    ],
-  );
-  assert.match(
-    aboutStylesSource,
-    /\.minke-about\s*\{[\s\S]*justify-content:\s*flex-end/u,
-  );
-  assert.match(
-    aboutStylesSource,
-    /\.minke-about__trigger:focus-visible[\s\S]*outline:/u,
-  );
-  assert.match(
-    aboutStylesSource,
-    /\.minke-about__actions\s*\{[\s\S]*justify-content:\s*center[\s\S]*margin:\s*0/u,
-  );
-  assert.match(
-    aboutStylesSource,
-    /\.minke-about\[data-wide="true"\]\s*\{[\s\S]*position:\s*absolute[\s\S]*bottom:\s*7px/u,
-  );
-  assert.match(
-    aboutStylesSource,
-    /\[data-slot="sidebar\.settings"\]\)\s*\{[\s\S]*padding-right:\s*40px/u,
-  );
-  assert.match(
-    aboutStylesSource,
-    /\.minke-about__action\s*\{[\s\S]*height:\s*38px[\s\S]*box-sizing:\s*border-box/u,
-  );
-  assert.match(
-    aboutStylesSource,
-    /\.minke-about__tagline\s*\{[\s\S]*max-width:\s*100%[\s\S]*text-wrap:\s*balance/u,
-  );
-  assert.doesNotMatch(
-    aboutStylesSource,
-    /\.minke-about__(?:description|title)/u,
-  );
-  assert.match(
-    aboutStylesSource,
-    /\.minke-about__community\s*\{[\s\S]*padding-top:\s*14px[\s\S]*border-top:\s*1px solid var\(--dsw-alias-border-l2\)[\s\S]*font-size:\s*11px[\s\S]*text-align:\s*center/u,
-  );
-  assert.match(
-    aboutStylesSource,
-    /@media \(prefers-reduced-motion:\s*reduce\)/u,
-  );
+  assert.equal(platformLabel("win32"), "Windows");
+  assert.equal(desktopAboutInfo({ minkeDesktop: { about: {
+    productName: "MyDSH", version: "0.0.4", platform: "win32", arch: "x64",
+  } } }).version, "0.0.4");
 });
 
 test("About stays hidden when desktop metadata is unavailable", () => {

@@ -83,7 +83,11 @@ export function protectTabWebviewGuest(
     }
   };
 
-  guest.on("will-navigate", keepWebNavigationInsideGuest);
+  guest.on("will-navigate", event => {
+    if (!event.isMainFrame) return;
+    event.preventDefault();
+    if (canOpenWithHost(event.url)) openWithHost(external, event.url);
+  });
   guest.on("will-redirect", keepWebNavigationInsideGuest);
   guest.setWindowOpenHandler(({ url }) => {
     if (canOpenWithHost(url)) openWithHost(external, url);
