@@ -8,12 +8,14 @@ import { desktopAboutInfo } from "../bridge.ts";
 
 export const installMarketManagementStyles = defineOverlayStyle("market-management", styles);
 export const marketZh = {
+  closeBehavior: "关闭窗口时", tray: "最小化到托盘", quit: "直接退出",
   title: "关于 MyDSH", desktop: "桌面端版本", harness: "DeepSeek Harness 版本", platform: "运行平台", market: "插件市场", softwareUpdate: "检查软件更新", updating: "正在检查或下载软件更新…", project: "MyDSH", upstream: "DeepSeek Harness", installed: "已安装版本", latest: "最新版本", missing: "未安装", unchecked: "尚未检测",
   check: "检测更新", install: "安装最新版", update: "更新插件市场", current: "已是最新版本",
   busy: "处理中…", restart: "重启软件", restartRequired: "安装完成，重启后生效", repository: "GitHub 仓库", unavailable: "桌面服务不可用",
   cancel: "取消", cancelled: "已取消", cancelling: "正在取消并还原…", checking: "正在检测更新…", prompt: "等待确认更新", downloading: "正在下载…", verifying: "正在校验安装包…", installing: "正在安装…", failed: "操作失败", errorDetails: "错误详情",
 };
 export const marketEn: Record<keyof typeof marketZh, string> = {
+  closeBehavior: "When closing the window", tray: "Minimize to tray", quit: "Quit application",
   title: "About MyDSH", desktop: "Desktop version", harness: "DeepSeek Harness version", platform: "Platform", market: "Plugin market", softwareUpdate: "Check for software updates", updating: "Checking or downloading software update…", project: "MyDSH", upstream: "DeepSeek Harness", installed: "Installed version", latest: "Latest version", missing: "Not installed", unchecked: "Not checked",
   check: "Check for updates", install: "Install latest", update: "Update market", current: "Up to date",
   busy: "Working…", restart: "Restart application", restartRequired: "Installed; restart to apply", repository: "GitHub repository", unavailable: "Desktop service unavailable",
@@ -31,6 +33,7 @@ export function MarketManagement({ t }: MarketManagementProps) {
   const [details, setDetails] = useState<DesktopDetails>();
   const [updateBusy, setUpdateBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [savingClose, setSavingClose] = useState(false);
   useEffect(() => {
     let active = true;
     const refresh = () => port?.info().then(value => { if (active) setDetails(value); })
@@ -88,6 +91,19 @@ export function MarketManagement({ t }: MarketManagementProps) {
       <div><dt>{t("harness")}</dt><dd>{details?.harnessVersion ?? "—"}</dd></div>
       <div><dt>Electron</dt><dd>{details?.electronVersion ?? "—"}</dd></div>
       <div><dt>{t("platform")}</dt><dd>{details ? details.platform.replace("win32", platformLabel("win32")) : "—"}</dd></div>
+      <div><dt><label htmlFor="mydsh-close-behavior">{t("closeBehavior")}</label></dt><dd>
+        <select id="mydsh-close-behavior" disabled={!details || !port || savingClose} value={details?.closeBehavior ?? "tray"}
+          onChange={async event => {
+            if (!port) return;
+            const value = event.target.value as "tray" | "quit";
+            setSavingClose(true); setError("");
+            try { await port.setCloseBehavior(value); setDetails(await port.info()); }
+            catch (error) { setError(String(error)); }
+            finally { setSavingClose(false); }
+          }}>
+          <option value="tray">{t("tray")}</option><option value="quit">{t("quit")}</option>
+        </select>
+      </dd></div>
     </dl>
     <div className="firefly-market-management__actions">
       <button disabled={!port || updateBusy || details?.updateBusy} onClick={() => void updateDesktop()}>{t("softwareUpdate")}</button>

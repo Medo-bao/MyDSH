@@ -25,6 +25,7 @@ const sourceExtensions = new Set([
   ".cjs",
 ]);
 const desktopOverlayContracts = new Set([
+  "@minke/harness-overlay/window-control-contract",
   "@minke/harness-overlay/market-contract",
   "@minke/harness-overlay/session-export-contract",
   "@minke/harness-overlay/model-runtime-settings-contract",

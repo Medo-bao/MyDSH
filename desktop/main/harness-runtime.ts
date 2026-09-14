@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { packageManagerEnvironment } from "./package-manager-path.ts";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import {
@@ -63,10 +64,12 @@ export interface HarnessRuntimeOptions {
   dshEntryPath: string;
   resolveEntryPath?: () => Promise<string>;
   nodeExecutable: string;
+  packageManagerBin?: string;
   dataRoot: string;
   electronExecutable: string;
   modelRuntimes: LocalModelRuntimeLaunchOptions;
   onUnexpectedExit(exit: HarnessRuntimeExit): void;
+  onRestartRequested?(): void;
   startupTimeoutMs?: number;
   shutdownTimeoutMs?: number;
 }
@@ -84,7 +87,7 @@ type HarnessRuntimeEnvironmentOptions = Pick<
   | "dataRoot"
   | "electronExecutable"
   | "modelRuntimes"
->;
+> & Partial<Pick<HarnessRuntimeOptions, "nodeExecutable" | "packageManagerBin">>;
 
 const LOCAL_MODEL_ENVIRONMENT = [
   {
@@ -109,7 +112,7 @@ export function harnessRuntimeEnvironment(
   inherited: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {
-    ...inherited,
+    ...(options.packageManagerBin && options.nodeExecutable ? packageManagerEnvironment(inherited, options.packageManagerBin, options.nodeExecutable) : inherited),
     DSH_ELECTRON_EXECUTABLE: options.electronExecutable,
     DSH_HOME: options.dataRoot,
   };
@@ -164,12 +167,19 @@ export class HarnessRuntime {
       {
         cwd: this.#options.dataRoot,
         detached: process.platform !== "win32",
-        env: { ...harnessRuntimeEnvironment(this.#options), FIREFLY_HARNESS_SECRET: launchSecret },
-        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...harnessRuntimeEnvironment(this.#options), FIREFLY_HARNESS_SECRET: launchSecret, MYDSH_MANAGED_RESTART: "1" },
+        stdio: ["ignore", "pipe", "pipe", "ipc"],
         windowsHide: true,
       },
     );
     this.#child = child;
+    child.on("message", (message) => {
+      if (this.#child === child && this.#ready && !this.#stopping
+        && typeof message === "object" && message !== null
+        && "type" in message && message.type === "mydsh:restart") {
+        this.#options.onRestartRequested?.();
+      }
+    });
 
     child.stdout?.setEncoding("utf8");
     child.stderr?.setEncoding("utf8");

@@ -113,6 +113,7 @@ test("desktop settings share one versioned Minke config", async () => {
 
     assert.deepEqual(JSON.parse(await readFile(store.path, "utf8")), {
       version: MINKE_CONFIG_VERSION,
+      closeBehavior: "tray",
       shortcuts: {
         "settings.open": "Mod+Comma",
         "session.new": "",
@@ -177,6 +178,7 @@ test("legacy version 1 configs default the new model runtime off", async () => {
       lmStudio: { enabled: false },
       ollama: { enabled: false },
     });
+    assert.equal(await store.closeBehavior.read(), "tray");
   });
 });
 

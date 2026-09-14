@@ -6,6 +6,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { parseCloseBehavior, type CloseBehavior } from "@minke/harness-overlay/window-control-contract.ts";
 import {
   DEFAULT_MODEL_RUNTIME_SETTINGS,
   parseModelRuntimeSettings,
@@ -39,6 +40,7 @@ export interface MinkeConfigDocument {
   shortcuts: ShortcutBindings;
   terminal: TerminalSettings;
   modelRuntime: ModelRuntimeSettings;
+  closeBehavior: CloseBehavior;
 }
 
 /** One validated section of the unified desktop configuration. */
@@ -52,11 +54,13 @@ const CONFIG_KEYS = new Set([
   "shortcuts",
   "terminal",
   "modelRuntime",
+  "closeBehavior",
 ]);
 
 function defaultDocument(): MinkeConfigDocument {
   return {
     version: MINKE_CONFIG_VERSION,
+    closeBehavior: "tray",
     shortcuts: {},
     terminal: { ...DEFAULT_TERMINAL_SETTINGS },
     modelRuntime: {
@@ -95,6 +99,7 @@ export function parseMinkeConfigDocument(
   return {
     version: MINKE_CONFIG_VERSION,
     shortcuts: parseShortcutBindings(record.shortcuts),
+    closeBehavior: record.closeBehavior === undefined ? "tray" : parseCloseBehavior(record.closeBehavior),
     terminal: parseTerminalSettings(record.terminal),
     modelRuntime:
       record.modelRuntime === undefined
@@ -119,6 +124,7 @@ export class MinkeConfigStore {
   readonly shortcuts: MinkeConfigSection<ShortcutBindings>;
   readonly terminal: MinkeConfigSection<TerminalSettings>;
   readonly modelRuntime: MinkeConfigSection<ModelRuntimeSettings>;
+  readonly closeBehavior: MinkeConfigSection<CloseBehavior>;
 
   #document: MinkeConfigDocument | undefined;
   #loaded = false;
@@ -127,6 +133,15 @@ export class MinkeConfigStore {
 
   constructor(userDataPath: string) {
     this.path = minkeConfigFilePath(userDataPath);
+    this.closeBehavior = Object.freeze({
+      read: () => this.#runExclusive(async () => (await this.#load()).closeBehavior),
+      write: (value: unknown) => this.#runExclusive(async () => {
+        const closeBehavior = parseCloseBehavior(value);
+        const next = { ...(await this.#load()), closeBehavior };
+        await this.#persist(next);
+        this.#document = next;
+      }),
+    });
     this.shortcuts = Object.freeze({
       read: () => this.#readShortcuts(),
       write: (value: unknown) => this.#writeShortcuts(value),

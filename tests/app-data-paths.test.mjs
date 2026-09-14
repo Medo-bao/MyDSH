@@ -54,10 +54,10 @@ test("desktop configures its data paths before Electron acquires state", () => {
   assert.ok(configureIndex < readyIndex);
 });
 
-test("closing the final desktop window exits instead of hiding to tray", () => {
-  assert.doesNotMatch(
+test("only an explicit tray preference hides a window, never an application quit", () => {
+  assert.match(
     desktopMainSource,
-    /window\.on\("close"[\s\S]*?window\.hide\(\)/u,
+    /!quitting && closeBehavior === "tray" && appTray && !appTray\.isDestroyed\(\)/u,
   );
   assert.match(
     desktopMainSource,

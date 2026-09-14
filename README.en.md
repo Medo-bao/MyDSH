@@ -28,9 +28,7 @@ MyDSH brings [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
 - **Local-first by design** — DeepSeek Harness runs locally, while MyDSH keeps its application state and browser session data on your machine. The existing `~/.minke` data directory remains the compatibility location for desktop preferences.
 - **A Windows-native desktop experience** — Native menus, configurable shortcuts, Session log export, synchronized themes, and English and Chinese UI are validated for daily Windows x64 use.
 
-![MyDSH 01](./assets/01.png)
-
-![MyDSH 02](./assets/02.png)
+![MyDSH for Windows](./assets/about.png)
 
 ## Installation
 
@@ -42,7 +40,7 @@ The current distribution target is Windows x64. Obtain installers from the proje
 
 ### Windows
 
-1. Download the Windows x64 `.exe` installer from [MyDSH releases](https://github.com/Medo-bao/MyDSH/releases). The current version is **0.0.2**.
+1. Download the Windows x64 `.exe` installer from [MyDSH releases](https://github.com/Medo-bao/MyDSH/releases). The current version is **0.0.3**.
 2. Run the installer and follow the on-screen instructions.
 3. Windows may show a reputation-based warning for a new pre-release build. Verify the source and SHA-256 before continuing.
 

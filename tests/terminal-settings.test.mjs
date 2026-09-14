@@ -214,6 +214,7 @@ test("the desktop store writes Terminal settings into Minke config", async () =>
   });
   assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
     version: MINKE_CONFIG_VERSION,
+    closeBehavior: "tray",
     shortcuts: {},
     terminal: {
       fontFamily: "JetBrains Mono",

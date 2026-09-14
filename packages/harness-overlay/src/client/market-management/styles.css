@@ -16,7 +16,10 @@
 .firefly-market-management button:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
 .firefly-market-management button:disabled { opacity: .5; cursor: default; }
 .firefly-market-management a { color: var(--dsw-alias-label-primary); }
+.firefly-market-management select { max-width: 100%; min-height: 32px; padding: 4px 8px; font: inherit; color: inherit; background: var(--dsw-alias-bg-base); border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; }
 .firefly-market-management :focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
 .firefly-market-management p { min-height: 20px; overflow-wrap: anywhere; color: var(--dsw-alias-label-secondary); }
+.firefly-market-management p:empty { display: none; }
+.firefly-market-management > h3 { margin-top: 32px; }
 .firefly-market-management [role="alert"] { color: var(--dsw-alias-label-primary); }
 .firefly-market-management progress { display: block; width: 100%; height: 8px; margin: 0 0 20px; }

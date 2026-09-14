@@ -16,9 +16,12 @@ import {
   type WebContents,
 } from "electron";
 import started from "electron-squirrel-startup";
+import { WINDOW_CONTROL_CHANNEL, WINDOW_STATE_CHANNEL, type CloseBehavior } from "@minke/harness-overlay/window-control-contract.ts";
 import { MarketManager } from "./market-manager";
+import { adaptMarketRestart } from "./market-restart-adapter.ts";
 import { bindMarketManagement } from "./market-ipc";
 import { join, parse } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   DesktopLocaleRuntime,
   translateDesktop,
@@ -44,6 +47,7 @@ import {
   type HarnessRuntimeExit,
 } from "./harness-runtime";
 import { readHarnessRuntimeLayout } from "./harness-launch";
+import { preparePackageManagerBin } from "./package-manager-path.ts";
 import { installFireflyPlugins } from "./system-plugin-installer";
 import { createStatefulMainWindow } from "./main-window-state";
 import {
@@ -99,6 +103,8 @@ import {
 } from "./client-updater";
 
 const PRODUCT_NAME = "MyDSH";
+let desktopConfig: MinkeConfigStore;
+let closeBehavior: CloseBehavior = "tray";
 const BACKGROUND_COLOR = "#0b1220";
 
 let mainWindow: BrowserWindow | undefined;
@@ -109,6 +115,7 @@ let harnessUrl: string | undefined;
 let quitting = false;
 let shutdownStarted = false;
 let recovering = false;
+let restartPending = false;
 let shortcutMenuBinding: ShortcutMenuBinding | undefined;
 let shortcutSettingsBinding: ShortcutSettingsBinding | undefined;
 let terminalSettingsBinding: TerminalSettingsBinding | undefined;
@@ -302,6 +309,16 @@ function isHarnessUrl(value: string): boolean {
   }
 }
 
+function isBootstrapUrl(value: string): boolean {
+  try {
+    const candidate = new URL(value);
+    const expected = new URL(bootstrapUrl() ?? pathToFileURL(join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)).href);
+    candidate.search = ""; candidate.hash = "";
+    expected.search = ""; expected.hash = "";
+    return candidate.href === expected.href;
+  } catch { return false; }
+}
+
 function canOpenExternally(value: string): boolean {
   try {
     return ["https:", "http:", "mailto:"].includes(new URL(value).protocol);
@@ -372,7 +389,29 @@ async function createWindow(): Promise<BrowserWindow> {
   );
   window.setMenuBarVisibility(false);
   bindMainWindowDevToolsShortcut(Menu);
-  const windowTheme = bindWindowTheme(window, nativeTheme);
+  const windowTheme = bindWindowTheme(window, nativeTheme, process.platform !== "win32");
+  window.on("close", (event) => {
+    if (!quitting && closeBehavior === "tray" && appTray && !appTray.isDestroyed()) {
+      event.preventDefault();
+      window.hide();
+    }
+  });
+  ipcMain.handle(WINDOW_CONTROL_CHANNEL, (event, ...args) => {
+    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame
+      || !(isHarnessUrl(event.senderFrame.url) || isBootstrapUrl(event.senderFrame.url)) || args.length !== 1) throw new Error("Unauthorized window request");
+    switch (args[0]) {
+      case "state": break;
+      case "minimize": window.minimize(); break;
+      case "maximize": if (window.isMaximized()) window.unmaximize(); else window.maximize(); break;
+      case "close": window.close(); return { maximized: false, visible: false };
+      default: throw new TypeError("Invalid window action");
+    }
+    return { maximized: window.isMaximized(), visible: window.isVisible() };
+  });
+  window.once("closed", () => ipcMain.removeHandler(WINDOW_CONTROL_CHANNEL));
+  const notifyWindowState = () => window.webContents.send(WINDOW_STATE_CHANNEL, { maximized: window.isMaximized(), visible: window.isVisible() });
+  window.on("maximize", notifyWindowState);
+  window.on("unmaximize", notifyWindowState);
   const localeRuntime = desktopLocale;
   if (localeRuntime === undefined) {
     throw new Error("desktop locale was not initialized");
@@ -394,12 +433,13 @@ async function createWindow(): Promise<BrowserWindow> {
   const marketBinding = bindMarketManagement(ipcMain,
     marketManager,
     (event) => event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && isHarnessUrl(event.senderFrame.url),
-    () => { app.relaunch(); app.quit(); },
+    () => { void restartHarness(); },
     {
-      info: async () => ({ version: app.getVersion(), harnessVersion: runningHarnessVersion,
+      info: async () => ({ closeBehavior, version: app.getVersion(), harnessVersion: runningHarnessVersion,
         electronVersion: process.versions.electron, platform: `${process.platform} ${process.arch}`, updateBusy: clientUpdateBusy, ...clientUpdateStatus }),
       update: () => checkClientUpdate(true),
       cancel: () => clientUpdateController?.abort(),
+      setCloseBehavior: async (value) => { await desktopConfig.closeBehavior.write(value); closeBehavior = value; },
     },
   );
   shortcutMenuBinding?.refreshBaseMenu();
@@ -519,7 +559,9 @@ async function startHarness(): Promise<void> {
   const window = mainWindow;
   if (activeRuntime === undefined || window === undefined) return;
   await prepareHarnessPlugins();
+  if (quitting || window.isDestroyed()) return;
   harnessUrl = await activeRuntime.start();
+  if (quitting || window.isDestroyed()) { await activeRuntime.stop(); return; }
   const launchUrl = harnessUrl;
   harnessUrl = new URL(launchUrl).origin;
   await window.loadURL(launchUrl);
@@ -535,6 +577,7 @@ async function prepareHarnessPlugins(): Promise<void> {
     pnpmExecutable: systemRuntime.pnpmExecutable, productRoot: productPluginRoot(),
     statePath: join(dshHome, "firefly-plugin-state.json"),
   });
+  await adaptMarketRestart(dshHome);
 }
 
 async function handleUnexpectedExit(exit: HarnessRuntimeExit): Promise<void> {
@@ -584,8 +627,39 @@ async function handleUnexpectedExit(exit: HarnessRuntimeExit): Promise<void> {
   }
 }
 
+async function restartHarness(): Promise<void> {
+  if (quitting || recovering || restartPending) return;
+  restartPending = true;
+  try {
+    // Let the market send its successful HTTP response before replacing the host.
+    await new Promise(resolve => setTimeout(resolve, 500));
+    while (!quitting && (marketManager?.installing || clientUpdateBusy)) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+    if (quitting) return;
+    recovering = true;
+    harnessUrl = undefined;
+    if (mainWindow) await loadBootstrap(mainWindow);
+    await runtime?.stop();
+    if (quitting) return;
+    await startHarness();
+    marketManager?.acknowledgeRestart();
+  } catch (error) {
+    if (quitting) return;
+    const result = await dialog.showMessageBox({
+      type: "error", title: desktopText("runtime.restartFailedTitle"),
+      message: error instanceof Error ? error.message : String(error),
+      buttons: [desktopText("runtime.restart"), desktopText("runtime.quit")], cancelId: 1, defaultId: 0, noLink: true,
+    });
+    if (result.response === 0) {
+      recovering = false; restartPending = false;
+      await restartHarness();
+    } else app.quit();
+  } finally { recovering = false; restartPending = false; }
+}
+
 async function checkClientUpdate(manual: boolean): Promise<void> {
-  if (clientUpdateBusy || clientUpdater === undefined) return;
+  if (clientUpdateBusy || recovering || restartPending || clientUpdater === undefined) return;
   clientUpdateBusy = true;
   clientUpdateController = new AbortController();
   const signal = clientUpdateController.signal;
@@ -701,6 +775,9 @@ async function bootstrap(): Promise<void> {
   });
   installPermissionPolicy();
   const minkeConfig = new MinkeConfigStore(app.getPath("userData"));
+  desktopConfig = minkeConfig;
+  try { closeBehavior = await minkeConfig.closeBehavior.read(); }
+  catch (error) { console.error("Unable to read close behavior:", error); }
   const shortcutStore = minkeConfig.shortcuts;
   const terminalSettingsStore = minkeConfig.terminal;
   const modelRuntimeSettingsStore = minkeConfig.modelRuntime;
@@ -797,6 +874,7 @@ async function bootstrap(): Promise<void> {
     sources: configuredClientUpdateSources(process.env),
   });
   runtime = new HarnessRuntime({
+    packageManagerBin: await preparePackageManagerBin(dshHome, systemRuntime),
     dshEntryPath: systemRuntime.dshEntryPath,
     resolveEntryPath: async () => (await readHarnessRuntimeLayout()).dshEntryPath,
     nodeExecutable: systemRuntime.nodeExecutable,
@@ -821,6 +899,7 @@ async function bootstrap(): Promise<void> {
       },
     },
     onUnexpectedExit: (exit) => void handleUnexpectedExit(exit),
+    onRestartRequested: () => { void restartHarness(); },
   });
   await startHarness();
   sessionCompletionWatcher = new SessionCompletionWatcher(
@@ -836,6 +915,7 @@ async function bootstrap(): Promise<void> {
 }
 
 app.on("before-quit", (event) => {
+  quitting = true;
   clientUpdateController?.abort();
   if (marketManager?.installing) {
     marketManager.cancel();
@@ -846,7 +926,6 @@ app.on("before-quit", (event) => {
     }
     return;
   }
-  quitting = true;
   sessionCompletionWatcher?.stop();
   sessionCompletionWatcher = undefined;
   for (const timer of updateTimers) clearTimeout(timer);

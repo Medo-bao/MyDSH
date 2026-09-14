@@ -47,6 +47,7 @@ export function windowTitleBarOverlay(
 export function bindWindowTheme(
   window: WindowThemeHost,
   nativeTheme: NativeThemeHost,
+  nativeCaption = true,
 ): WindowThemeBinding {
   let disposed = false;
   const ipc = window.webContents.ipc;
@@ -59,7 +60,7 @@ export function bindWindowTheme(
     if (nativeTheme.themeSource !== source) {
       nativeTheme.themeSource = source;
     }
-    window.setTitleBarOverlay?.(
+    if (nativeCaption) window.setTitleBarOverlay?.(
       windowTitleBarOverlay(message.colorScheme),
     );
   };

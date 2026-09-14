@@ -107,6 +107,8 @@ try {
   await loaded.screenshot({ path: "docs/research/desktop-startup-fixed.png" });
   await loaded.locator('[data-slot="sidebar.settings"] button[aria-haspopup="dialog"][aria-expanded]').first().click();
   await loaded.getByRole("button", { name: "插件", exact: true }).waitFor();
+  await loaded.waitForFunction(() => [...document.querySelectorAll(".mydsh-caption-controls button")].length === 3
+    && [...document.querySelectorAll(".mydsh-caption-controls button")].every(button => button.disabled));
   for (const viewport of [{ width: 1280, height: 1000 }, { width: 1280, height: 800 }, { width: 960, height: 640 }]) {
     await loaded.setViewportSize(viewport);
     const bounds = await loaded.getByRole("dialog", { name: "设置", exact: true }).boundingBox();
@@ -144,13 +146,30 @@ try {
   assert.equal(await management.getByRole("link", { name: "MyDSH", exact: true }).getAttribute("href"), "https://github.com/Medo-bao/MyDSH");
   assert.equal(await management.getByRole("link", { name: "DeepSeek Harness", exact: true }).getAttribute("href"), "https://github.com/deepseek-ai/deepseek-harness");
   await management.getByRole("button", { name: "检测更新", exact: true }).click();
-  await management.locator("dd").nth(5).filter({ hasText: /^\d+\.\d+\.\d+/u }).waitFor({ timeout: 25_000 });
-  await management.locator("dd").first().filter({ hasText: "0.0.2" }).waitFor({ timeout: 30_000 });
+  await loaded.waitForFunction(() => {
+    const section = document.querySelector(".firefly-market-management");
+    return /^\d+\.\d+\.\d+/u.test([...section.querySelectorAll("dd")].at(-1)?.textContent ?? "") || section.querySelector('[role="alert"]');
+  }, null, { timeout: 25_000 });
+  await management.locator("dd").first().filter({ hasText: "0.0.3" }).waitFor({ timeout: 30_000 });
   await management.locator("dd").nth(1).filter({ hasText: /^\d+\.\d+\.\d+/u }).waitFor({ timeout: 5000 });
   await management.locator("dd").nth(2).filter({ hasText: /^\d+\.\d+\.\d+/u }).waitFor({ timeout: 5000 });
   assert.equal(await management.getByRole("link", { name: "GitHub 仓库" }).getAttribute("href"), "https://github.com/dsh-market/dsh-market");
   assert.equal(await management.getByRole("button", { name: /安装最新版|更新插件市场|已是最新版本/u }).count(), 1);
-  assert.equal(await management.getByRole("alert").count(), 0);
+  if (await management.getByRole("alert").count()) {
+    const error = await management.getByRole("alert").textContent();
+    assert.match(error, /fetch failed|network|timeout|timed out|abort|HTTP 5\d\d/iu, "Only external registry availability can be skipped");
+    console.log("Market registry unavailable; verified visible error state:", error);
+  }
+  const closeSelect = management.getByRole("combobox", { name: "关闭窗口时" });
+  await closeSelect.waitFor();
+  const originalClose = await closeSelect.inputValue();
+  try {
+    await closeSelect.selectOption("tray");
+    await loaded.waitForFunction(async () => (await window.minkeDesktop.market.info()).closeBehavior === "tray");
+    await loaded.getByRole("button", { name: "通用设置", exact: true }).click();
+    await loaded.getByRole("navigation").getByRole("button", { name: "关于 MyDSH", exact: true }).click();
+    await loaded.waitForFunction(() => document.querySelector("#mydsh-close-behavior")?.value === "tray");
+  } finally { await loaded.evaluate(value => window.minkeDesktop.market.setCloseBehavior(value), originalClose); }
   await loaded.screenshot({ path: "docs/research/market-management.png" });
   for (const viewport of [{ width: 1280, height: 800 }, { width: 960, height: 640 }]) {
     await loaded.setViewportSize(viewport);
@@ -160,7 +179,7 @@ try {
   }
   await loaded.getByRole("button", { name: "通用设置", exact: true }).click();
   await loaded.getByRole("navigation").getByRole("button", { name: "关于 MyDSH", exact: true }).click();
-  await management.locator("dd").first().filter({ hasText: "0.0.2" }).waitFor();
+  await management.locator("dd").first().filter({ hasText: "0.0.3" }).waitFor();
   const settingsDialog = loaded.getByRole("dialog", { name: "设置", exact: true });
   await settingsDialog.getByRole("button").first().focus();
   const escapedFocus = [];
@@ -189,6 +208,30 @@ try {
   await loaded.locator('[data-slot="sidebar.settings"] button[aria-expanded="false"]').first().waitFor();
   assert.equal(await loaded.evaluate(() => Boolean(document.activeElement?.closest('[data-slot="sidebar.settings"]'))), true, "Closing settings must restore focus to its trigger");
   assert.equal(await loaded.evaluate(() => getComputedStyle(document.querySelector("[data-dsh-desktop-toolbar]"), "::after").content), "none");
+  await loaded.waitForFunction(() => [...document.querySelectorAll(".mydsh-caption-controls button")].every(button => !button.disabled));
+  const originalUrl = loaded.url();
+  const response = await loaded.evaluate(async () => {
+    const result = await fetch("/dsh-market/restart", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    return { status: result.status, body: await result.json() };
+  });
+  assert.equal(response.status, 202, JSON.stringify(response));
+  await loaded.waitForURL(url => url.toString() !== originalUrl && /^http:\/\/127\.0\.0\.1:/u.test(url.toString()), { timeout: 90_000 });
+  await loaded.locator("[data-dsh-desktop-toolbar]").waitFor({ timeout: 60_000 });
+  assert.equal(child.exitCode, null, "Market restart must preserve the Electron process");
+  console.log("Market restart returned 202 and desktop-owned Harness restarted without a crash dialog.");
+  const savedCloseBehavior = await loaded.evaluate(async () => (await window.minkeDesktop.market.info()).closeBehavior);
+  try {
+    await loaded.evaluate(() => window.minkeDesktop.market.setCloseBehavior("tray"));
+    await loaded.locator(".mydsh-caption-close").click();
+    await loaded.waitForFunction(async () => !(await window.minkeDesktop.windowControl("state")).visible);
+    assert.equal(child.exitCode, null, "Tray close must leave the application running");
+    const activate = spawn(resolve("out/MyDSH-win32-x64/MyDSH.exe"), [], { stdio: "ignore", windowsHide: true });
+    await new Promise(done => activate.once("exit", done));
+    await loaded.waitForFunction(async () => (await window.minkeDesktop.windowControl("state")).visible);
+    console.log("Close-to-tray and single-instance restore passed.");
+  } finally {
+    await loaded.evaluate(value => window.minkeDesktop.market.setCloseBehavior(value ?? "tray"), savedCloseBehavior);
+  }
   console.log("Upstream settings and desktop chrome remain; all optional plugin settings are absent.");
   console.log("Packaged Electron reached the Harness UI using the existing user profile.");
   for (const context of browser.contexts()) for (const page of context.pages()) await page.close();

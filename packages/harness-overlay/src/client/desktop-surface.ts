@@ -1,7 +1,8 @@
 import {
   installDesktopSurfaceStyles,
 } from "./desktop-surface.styles.ts";
-import { ChevronLeft, ChevronRight } from "@lucide/icons";
+import { ChevronLeft, ChevronRight, Minus, Square, Copy, X } from "@lucide/icons";
+import type { WindowAction, WindowState } from "../window-control-contract.ts";
 import { buildLucideDataUri } from "@lucide/icons/build";
 import { installModalFocus } from "./modal-focus.ts";
 
@@ -130,6 +131,27 @@ function createDesktopToolbar(
     button.textContent = actions.labels[kind];
     toolbar.append(button);
   }
+  const controls = root.createElement("div");
+  controls.className = "mydsh-caption-controls";
+  const port = (root.defaultView as unknown as { minkeDesktop?: { windowControl(action: WindowAction): Promise<WindowState> } })?.minkeDesktop;
+  const zh = root.documentElement.lang.startsWith("zh");
+  for (const [action, icon, label] of [
+    ["minimize", Minus, zh ? "最小化" : "Minimize"],
+    ["maximize", Square, zh ? "最大化或还原" : "Maximize or restore"],
+    ["close", X, zh ? "关闭" : "Close"],
+  ] as const) {
+    const glyph = root.createElement("span");
+    glyph.setAttribute("aria-hidden", "true");
+    glyph.style.maskImage = `url("${buildLucideDataUri(icon, { size: 16 })}")`;
+    const button = toolbarButton(root, label, `mydsh-caption-${action}`, () => {
+      void port?.windowControl(action).then(state => {
+        if (action === "maximize") glyph.style.maskImage = `url("${buildLucideDataUri(state.maximized ? Copy : Square, { size: 16 })}")`;
+      }).catch(error => console.error("Window action failed:", error));
+    });
+    button.append(glyph);
+    controls.append(button);
+  }
+  toolbar.append(controls);
   return toolbar;
 }
 
@@ -406,6 +428,11 @@ export function installDesktopSurface(
     : createDesktopToolbar(root, actions);
   if (toolbar !== undefined) root.body.prepend(toolbar);
   const disposeFocus = installModalFocus(root);
+  const port = (view as unknown as { minkeDesktop?: { windowState?(callback: (state: WindowState) => void): () => void } }).minkeDesktop;
+  const disposeWindowState = port?.windowState?.(state => {
+    const glyph = toolbar?.querySelector<HTMLElement>(".mydsh-caption-maximize span");
+    if (glyph) glyph.style.maskImage = `url("${buildLucideDataUri(state.maximized ? Copy : Square, { size: 16 })}")`;
+  });
   let frame: number | undefined;
   let disposed = false;
 
@@ -419,6 +446,8 @@ export function installDesktopSurface(
     const arrows = toolbar?.querySelectorAll<HTMLButtonElement>(".firefly-desktop-toolbar__arrow");
     if (arrows?.[0]) arrows[0].disabled = actions?.canBack?.() === false;
     if (arrows?.[1]) arrows[1].disabled = actions?.canForward?.() === false;
+    const settingsOpen = root.querySelector('[data-slot="sidebar.settings"] button[aria-haspopup="dialog"][aria-expanded="true"]') !== null;
+    for (const button of toolbar?.querySelectorAll<HTMLButtonElement>(".mydsh-caption-controls button") ?? []) button.disabled = settingsOpen;
   };
   const scheduleReconcile = (): void => {
     if (disposed || frame !== undefined) return;
@@ -435,6 +464,7 @@ export function installDesktopSurface(
     attributes: true,
     attributeFilter: [
       "aria-hidden",
+      "aria-expanded",
       "aria-modal",
       "class",
       "hidden",
@@ -476,6 +506,7 @@ export function installDesktopSurface(
     disposed = true;
     observer.disconnect();
     disposeFocus();
+    disposeWindowState?.();
     root.removeEventListener("beforetoggle", handleBeforeToggle, true);
     root.removeEventListener("toggle", handleLayerStateChange, true);
     root.removeEventListener(

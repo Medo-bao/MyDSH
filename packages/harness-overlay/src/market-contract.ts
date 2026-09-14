@@ -9,6 +9,7 @@ export const DESKTOP_CANCEL_UPDATE_CHANNEL = "mydsh:about:cancel-update";
 export const MARKET_CANCEL_CHANNEL = "firefly:market:cancel";
 
 export interface DesktopDetails {
+  closeBehavior?: import("./window-control-contract.ts").CloseBehavior;
   version: string;
   harnessVersion: string;
   electronVersion: string;
@@ -30,6 +31,7 @@ export interface MarketStatus {
 }
 
 export interface MarketPort {
+  setCloseBehavior(value: import("./window-control-contract.ts").CloseBehavior): Promise<void>;
   info(): Promise<DesktopDetails>;
   updateDesktop(): Promise<void>;
   cancelUpdate(): Promise<void>;

@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   cp,
+  lstat,
   mkdir,
   readFile,
   readdir,
@@ -93,7 +94,8 @@ export async function installFireflyPlugins(options: Readonly<{
     try {
       const actual = await Promise.all(plugins.map((plugin, index) =>
         pluginContentHash(join(options.dshHome, "firefly-plugins", stagingDirectory(plugin, index)))));
-      if (actual.every((hash, index) => hash === expected.contentHashes[index])) return;
+      if (actual.every((hash, index) => hash === expected.contentHashes[index])
+        && await profileDependenciesInstalled(options.dshHome, plugins.map(plugin => plugin.name))) return;
     } catch { /* Missing staged files must be repaired. */ }
   }
 
@@ -102,6 +104,7 @@ export async function installFireflyPlugins(options: Readonly<{
   await ensureWebProfile(options.dshHome);
   await ensureProfileBuildPolicy(options.dshHome);
   await repairLegacyProfileManifest(options.dshHome);
+  if (!await profileDependenciesInstalled(options.dshHome)) await quarantineIncompleteModules(options.dshHome);
   const installedManagedPlugins = await installedPluginNames(
     options.dshHome,
     [
@@ -138,6 +141,40 @@ export async function installFireflyPlugins(options: Readonly<{
   await reconcileOwnedBundles(options.dshHome, plugins);
   await writeStateAtomic(options.statePath, expected);
   });
+}
+
+export async function quarantineIncompleteModules(dshHome: string): Promise<string | undefined> {
+  const modules = join(dshHome, "profiles", "web", "node_modules");
+  try {
+    if ((await lstat(modules)).isSymbolicLink()) throw new Error("Refusing redirected profile node_modules");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+  const backupRoot = join(dshHome, ".mydsh-damaged-modules");
+  await mkdir(backupRoot, { recursive: true });
+  if ((await lstat(backupRoot)).isSymbolicLink()) throw new Error("Refusing redirected module backup");
+  const backup = join(backupRoot, randomUUID());
+  // Rename the directory itself; never follow or delete legacy links inside it.
+  await rename(modules, backup);
+  return backup;
+}
+
+export async function profileDependenciesInstalled(dshHome: string, required: readonly string[] = []): Promise<boolean> {
+  try {
+    const root = join(dshHome, "profiles", "web");
+    await readFile(join(root, "node_modules", ".modules.yaml"), "utf8");
+    const profile = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
+    const dependencies = profile.dependencies;
+    if (!dependencies || typeof dependencies !== "object" || !Object.keys(dependencies).length) return false;
+    if (required.some(name => !Object.hasOwn(dependencies, name))) return false;
+    for (const name of Object.keys(dependencies)) {
+      if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/iu.test(name) || name === "." || name === "..") return false;
+      const manifest = JSON.parse(await readFile(join(root, "node_modules", name, "package.json"), "utf8"));
+      if (manifest.name !== name || typeof manifest.version !== "string") return false;
+    }
+    return true;
+  } catch { return false; }
 }
 
 async function ensureWebProfile(dshHome: string): Promise<void> {

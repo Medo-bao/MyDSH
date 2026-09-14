@@ -17,6 +17,15 @@ function fixture() {
   return { binding, ipc, nativeTheme };
 }
 
+test("renderer caption mode never re-enables native caption buttons on theme changes", () => {
+  const ipc = new EventEmitter();
+  const nativeTheme = { themeSource: "system" };
+  const binding = bindWindowTheme({ webContents: { ipc }, setTitleBarOverlay: () => assert.fail("Native captions must stay disabled") }, nativeTheme, false);
+  ipc.emit(WINDOW_THEME_CHANNEL, {}, { preference: "dark", colorScheme: "dark" });
+  assert.equal(nativeTheme.themeSource, "dark");
+  binding.dispose();
+});
+
 test("explicit renderer themes update the native window appearance", () => {
   const { binding, ipc, nativeTheme } = fixture();
 
@@ -69,7 +78,7 @@ test("Windows reserves a dedicated native caption surface", () => {
   assert.deepEqual(windowsWindowOptions("linux"), undefined);
   assert.deepEqual(windowsWindowOptions("win32"), {
     titleBarStyle: "hidden",
-    titleBarOverlay: windowTitleBarOverlay("light"),
+    titleBarOverlay: false,
     backgroundColor: "#00000000",
     backgroundMaterial: "acrylic",
     autoHideMenuBar: true,

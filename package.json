@@ -6,7 +6,7 @@
   "author": "MyDSH contributors",
   "license": "Apache-2.0",
   "private": true,
-  "version": "0.0.2",
+  "version": "0.0.3",
   "packageManager": "pnpm@11.7.0",
   "main": ".vite/build/main.js",
   "scripts": {
@@ -36,6 +36,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@lucide/icons": "1.31.0",
     "@electron-forge/cli": "7.11.2",
     "@electron-forge/maker-squirrel": "7.11.2",
     "@electron-forge/plugin-fuses": "7.11.2",

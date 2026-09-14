@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+.mydsh-bootstrap-caption { position: fixed; inset: 0 0 auto 0; height: 44px; display: flex; justify-content: flex-end; -webkit-app-region: drag; color: var(--minke-bootstrap-status-color); }
+.mydsh-bootstrap-caption button { width: 46px; height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: inherit; -webkit-app-region: no-drag; }
+.mydsh-bootstrap-caption button:hover { background: #8883; }
+.mydsh-bootstrap-caption .mydsh-bootstrap-close:hover { background: #c42b1c; color: white; }
+.mydsh-bootstrap-caption button:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
+.mydsh-bootstrap-caption span { width: 16px; height: 16px; background: currentColor; mask: center / contain no-repeat; }
+
 @layer base {
   :root {
     color-scheme: light dark;

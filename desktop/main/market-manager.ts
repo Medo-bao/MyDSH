@@ -50,6 +50,7 @@ export class MarketManager {
   }) { this.home = home; this.dependencies = dependencies; }
 
   get installing(): boolean { return this.#installing; }
+  acknowledgeRestart(): void { this.#restartRequired = false; }
   whenIdle(): Promise<void> { return this.#idle; }
   cancel(): void { this.#controller?.abort(new DOMException("Installation cancelled", "AbortError")); }
 

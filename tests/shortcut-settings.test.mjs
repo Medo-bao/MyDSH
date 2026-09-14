@@ -57,6 +57,7 @@ test("the desktop store writes the shared Minke config", async () => {
   });
   assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
     version: MINKE_CONFIG_VERSION,
+    closeBehavior: "tray",
     shortcuts: {
       "settings.open": "Mod+Comma",
       "session.new": "",

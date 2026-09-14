@@ -54,7 +54,7 @@ const config: ForgeConfig = {
             runtimeContract.runtimeSizeBudgetBytes[platform],
         });
         console.log(
-          `Verified packaged Host ${(report.host.bytes / 1024 / 1024).toFixed(1)} MiB/${String(report.host.files)} files and app ${(report.app.bytes / 1024 / 1024).toFixed(1)} MiB`,
+          `Verified packaged plugins ${(report.host.bytes / 1024 / 1024).toFixed(1)} MiB/${String(report.host.files)} files and app ${(report.app.bytes / 1024 / 1024).toFixed(1)} MiB`,
         );
       }
     },

@@ -1,4 +1,5 @@
 import type { IpcMain, IpcMainInvokeEvent } from "electron";
+import { CLOSE_BEHAVIOR_CHANNEL, parseCloseBehavior, type CloseBehavior } from "@minke/harness-overlay/window-control-contract.ts";
 import { MARKET_CHECK_CHANNEL, MARKET_INSTALL_CHANNEL, MARKET_RESTART_CHANNEL, MARKET_STATUS_CHANNEL } from "@minke/harness-overlay/market-contract.ts";
 import type { MarketManager } from "./market-manager.ts";
 import { MARKET_CANCEL_CHANNEL, DESKTOP_CANCEL_UPDATE_CHANNEL } from "@minke/harness-overlay/market-contract.ts";
@@ -6,7 +7,7 @@ import { DESKTOP_INFO_CHANNEL, DESKTOP_UPDATE_CHANNEL, type DesktopDetails } fro
 
 export function bindMarketManagement(ipc: Pick<IpcMain, "handle" | "removeHandler">, manager: MarketManager,
   authorize: (event: IpcMainInvokeEvent) => boolean, restart: () => void,
-  desktop?: { info(): Promise<DesktopDetails>; update(): Promise<void>; cancel?(): void }) {
+  desktop?: { info(): Promise<DesktopDetails>; update(): Promise<void>; cancel?(): void; setCloseBehavior?(value: CloseBehavior): Promise<void> }) {
   const actions = new Map<string, () => unknown>([
     [MARKET_STATUS_CHANNEL, () => manager.status()],
     [MARKET_CHECK_CHANNEL, () => manager.check()],
@@ -26,5 +27,9 @@ export function bindMarketManagement(ipc: Pick<IpcMain, "handle" | "removeHandle
     if (!authorize(event) || args.length !== 0) throw new Error("Unauthorized market request");
     return action();
   });
-  return { dispose() { for (const channel of actions.keys()) ipc.removeHandler(channel); } };
+  ipc.handle(CLOSE_BEHAVIOR_CHANNEL, (event, ...args) => {
+    if (!authorize(event) || args.length !== 1 || !desktop?.setCloseBehavior) throw new Error("Unauthorized settings request");
+    return desktop.setCloseBehavior(parseCloseBehavior(args[0]));
+  });
+  return { dispose() { for (const channel of actions.keys()) ipc.removeHandler(channel); ipc.removeHandler(CLOSE_BEHAVIOR_CHANNEL); } };
 }

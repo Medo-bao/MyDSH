@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { CLOSE_BEHAVIOR_CHANNEL, WINDOW_CONTROL_CHANNEL, WINDOW_STATE_CHANNEL, parseCloseBehavior, type WindowAction, type WindowState } from "@minke/harness-overlay/window-control-contract.ts";
 import { MARKET_CANCEL_CHANNEL, DESKTOP_CANCEL_UPDATE_CHANNEL, DESKTOP_INFO_CHANNEL, DESKTOP_UPDATE_CHANNEL, MARKET_CHECK_CHANNEL, MARKET_INSTALL_CHANNEL, MARKET_RESTART_CHANNEL, MARKET_STATUS_CHANNEL, type MarketPort } from "@minke/harness-overlay/market-contract.ts";
 import appManifest from "../../package.json";
 import {
@@ -341,7 +342,16 @@ const windowMenu = Object.freeze({
 contextBridge.exposeInMainWorld(
   "minkeDesktop",
   Object.freeze({
+    windowControl: (action: WindowAction) => ipcRenderer.invoke(WINDOW_CONTROL_CHANNEL, action),
+    windowState: (callback: (state: WindowState) => void) => {
+      let active = true;
+      const listener = (_event: unknown, value: WindowState) => { if (active) callback(value); };
+      ipcRenderer.on(WINDOW_STATE_CHANNEL, listener);
+      void ipcRenderer.invoke(WINDOW_CONTROL_CHANNEL, "state").then(value => listener(undefined, value)).catch(() => {});
+      return () => { active = false; ipcRenderer.removeListener(WINDOW_STATE_CHANNEL, listener); };
+    },
     market: Object.freeze({
+      setCloseBehavior: (value) => ipcRenderer.invoke(CLOSE_BEHAVIOR_CHANNEL, parseCloseBehavior(value)),
       cancel: () => ipcRenderer.invoke(MARKET_CANCEL_CHANNEL),
       cancelUpdate: () => ipcRenderer.invoke(DESKTOP_CANCEL_UPDATE_CHANNEL),
       info: () => ipcRenderer.invoke(DESKTOP_INFO_CHANNEL),
